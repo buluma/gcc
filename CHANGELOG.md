@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- fix: reduce PR detail dialog width to 70vw [\#17](https://github.com/buluma/gcc/pull/17) ([buluma](https://github.com/buluma))
 - fix: force PR detail dialog width and add description scroll [\#16](https://github.com/buluma/gcc/pull/16) ([buluma](https://github.com/buluma))
 - fix: query statusCheckRollup subfields and widen PR detail dialog [\#15](https://github.com/buluma/gcc/pull/15) ([buluma](https://github.com/buluma))
 - feat: add PR details view in a pop-up dialog [\#14](https://github.com/buluma/gcc/pull/14) ([buluma](https://github.com/buluma))
