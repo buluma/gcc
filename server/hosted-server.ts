@@ -147,6 +147,12 @@ async function handleRequest(
   const url = new URL(req.url ?? "/", baseUrl)
   applySecurityHeaders(res, dependencies.secureCookies)
 
+  // Allow POST for merge PR endpoint
+  const isMergePrPost = url.pathname === "/api/merge-pr" && req.method === "POST"
+  if (isMergePrPost) {
+    return handleMergePR(dependencies, req, res)
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD")
     sendJson(res, 405, { message: "Method not allowed." })

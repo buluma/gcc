@@ -1,0 +1,54 @@
+services:
+  github-command-center:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-command-center
+    ports:
+      - "3000:3000"
+    environment:
+      # Required: public URL of the deployment
+      - BASE_URL=http://localhost:3000
+      # Optional: server-side token for public profile REST quota (recommended)
+      - GITHUB_PUBLIC_TOKEN=${GITHUB_PUBLIC_TOKEN:-}
+      # Optional: enable GitHub OAuth for private dashboard & merge PR
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      # Required when OAuth is enabled (generate: openssl rand -hex 32)
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      # Set to "1" when behind a reverse proxy (nginx, Caddy, load balancer)
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+    # Optional: persist repo detail cache
+    # volumes:
+    #   - gcc-repo-cache:/app/.cache/github-command-center
+
+  # Optional: reverse proxy with automatic HTTPS (Caddy)
+  # Uncomment and configure domain for production HTTPS + OAuth
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: gcc-caddy
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "443:443/udp"
+  #   environment:
+  #     - DOMAIN=your-domain.com
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   depends_on:
+  #     - github-command-center
+  #   restart: unless-stopped
+
+# volumes:
+#   gcc-repo-cache:
+#   caddy_data:
+#   caddy_config:
