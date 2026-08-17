@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import type { ReactNode } from "react"
 import {
   CircleDotIcon,
@@ -427,6 +427,12 @@ function FeedIssueRow({
 }) {
   const [isMerging, setIsMerging] = useState(false)
 
+  const handleOpenDetail = useCallback(() => {
+    if (!item.isPullRequest || !onOpenPRDetail) return
+    const [owner, repo] = item.repo.split("/")
+    onOpenPRDetail(owner, repo, item.number)
+  }, [item.isPullRequest, item.repo, item.number, onOpenPRDetail])
+
   const handleMerge = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -452,22 +458,21 @@ function FeedIssueRow({
   return (
     <div className="group grid grid-cols-[auto_1fr_auto] items-start gap-2 rounded-md px-1.5 py-1.5 outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
       <Icon className={cn("mt-0.5 size-3.5", issueStateClassName(item.state))} aria-hidden="true" />
-      <a
-        href={item.url}
-        target="_blank"
-        rel="noreferrer"
-        className="min-w-0"
-        onClick={(e) => {
-          if (item.isPullRequest && onOpenPRDetail) {
-            e.preventDefault()
-            e.stopPropagation()
-            const [owner, repo] = item.repo.split("/")
-            onOpenPRDetail(owner, repo, item.number)
-          }
-        }}
-      >
-        <span className="block truncate font-medium leading-4">{item.title}</span>
-        <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+      <div className="min-w-0">
+        <button
+          type="button"
+          onClick={handleOpenDetail}
+          className="w-full text-left truncate font-medium leading-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+        >
+          <span className="block truncate">{item.title}</span>
+        </button>
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noreferrer"
+          className="block truncate text-[11px] leading-4 text-muted-foreground hover:text-foreground"
+          aria-label={`Open #${item.number} on GitHub`}
+        >
           {shortRepoName(item.repo, viewerLogin)}#{item.number}
           {" · "}
           {item.isDraft && item.state === "open" ? (
@@ -478,8 +483,8 @@ function FeedIssueRow({
           {item.author ? ` · ${item.author}` : ""}
           {" · "}
           {formatRelative(item.updatedAt)}
-        </span>
-      </a>
+        </a>
+      </div>
       {showMergeButton && (
         <Button
           variant="ghost"
