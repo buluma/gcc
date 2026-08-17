@@ -59,4 +59,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      "/api/merge-pr": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
+      "/auth": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
+    },
+  },
 })
