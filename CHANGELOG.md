@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- fix: query statusCheckRollup subfields and widen PR detail dialog [\#15](https://github.com/buluma/gcc/pull/15) ([buluma](https://github.com/buluma))
 - feat: add PR details view in a pop-up dialog [\#14](https://github.com/buluma/gcc/pull/14) ([buluma](https://github.com/buluma))
 
 ## [v0.2.0](https://github.com/buluma/gcc/tree/v0.2.0) (2026-08-17)
