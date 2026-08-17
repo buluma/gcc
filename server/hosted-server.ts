@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto"
+
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { extname, join, normalize, parse, sep } from "node:path"
 
@@ -22,6 +22,12 @@ import {
   type HostedRateLimiters,
   type RateLimitResult,
 } from "./rate-limit.ts"
+import { createRequire } from "node:module"
+
+function getRandomBytes(size: number): Buffer {
+  const crypto = createRequire(import.meta.url)("node:crypto")
+  return crypto.randomBytes(size)
+}
 
 export const OAUTH_SCOPES = "repo user"
 export const SESSION_COOKIE = "gcc_session"
@@ -206,7 +212,7 @@ function handleLogin(
     return
   }
 
-  const state = randomBytes(16).toString("hex")
+  const state = getRandomBytes(16).toString("hex")
   const authorize = new URL("https://github.com/login/oauth/authorize")
   authorize.searchParams.set("client_id", dependencies.clientId)
   authorize.searchParams.set("redirect_uri", `${baseUrl}/auth/callback`)
@@ -257,7 +263,7 @@ async function handleCallback(
       redirectUri: `${baseUrl}/auth/callback`,
     })
     const login = await dependencies.fetchViewerLogin(token)
-    const session: Session = { id: randomBytes(16).toString("hex"), token, login, issuedAt: Date.now() }
+    const session: Session = { id: getRandomBytes(16).toString("hex"), token, login, issuedAt: Date.now() }
 
     res.statusCode = 302
     res.setHeader("Set-Cookie", [
