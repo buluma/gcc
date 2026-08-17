@@ -343,3 +343,52 @@ export async function revokeOAuthToken(options: {
     response.status
   )
 }
+
+export async function mergePullRequest(options: {
+  token: string
+  owner: string
+  repo: string
+  pullNumber: number
+  mergeMethod?: "merge" | "squash" | "rebase"
+  commitTitle?: string
+  commitMessage?: string
+}): Promise<{ merged: boolean; message: string; sha?: string }> {
+  const response = await fetch(
+    `${GITHUB_API_BASE}/repos/${encodeURIComponent(options.owner)}/${encodeURIComponent(options.repo)}/pulls/${options.pullNumber}/merge`,
+    {
+      method: "PUT",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${options.token}`,
+        "User-Agent": "github-command-center",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        merge_method: options.mergeMethod ?? "squash",
+        commit_title: options.commitTitle,
+        commit_message: options.commitMessage,
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }
+  )
+
+  const body = await response.json() as { merged?: boolean; message?: string; sha?: string }
+
+  if (!response.ok) {
+    throw createApiError(
+      body.message ?? `Failed to merge PR: ${response.status}`,
+      `PUT /repos/${options.owner}/${options.repo}/pulls/${options.pullNumber}/merge`,
+      response.status
+    )
+  }
+
+  if (!body.merged) {
+    throw createApiError(
+      body.message ?? "Pull request could not be merged",
+      `PUT /repos/${options.owner}/${options.repo}/pulls/${options.pullNumber}/merge`,
+      response.status
+    )
+  }
+
+  return { merged: true, message: body.message ?? "Pull request merged successfully", sha: body.sha }
+}
