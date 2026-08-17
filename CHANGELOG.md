@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- feat: add PR merge capability [\#11](https://github.com/buluma/gcc/pull/11) ([buluma](https://github.com/buluma))
 - test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
 
 ## [v0.1.0](https://github.com/buluma/gcc/tree/v0.1.0) (2026-08-17)
