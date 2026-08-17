@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased](https://github.com/buluma/gcc/tree/HEAD)
+
+[Full Changelog](https://github.com/buluma/gcc/compare/v0.1.0...HEAD)
+
+**Merged pull requests:**
+
+- test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
+
 ## [v0.1.0](https://github.com/buluma/gcc/tree/v0.1.0) (2026-08-17)
 
 [Full Changelog](https://github.com/buluma/gcc/compare/d89a411061b8c608de193e76531f26c307a4b982...v0.1.0)
