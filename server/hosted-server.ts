@@ -22,6 +22,7 @@ import {
   type HostedRateLimiters,
   type RateLimitResult,
 } from "./rate-limit.ts"
+import { handleMergePR } from "./merge-pr-handler.ts"
 import { createRequire } from "node:module"
 
 function getRandomBytes(size: number): Buffer {
@@ -175,6 +176,10 @@ async function handleRequest(
       }
       throw error
     }
+  }
+  const isMergePrPost = url.pathname === "/api/merge-pr" && (req as IncomingMessage).method === "POST"
+  if (isMergePrPost) {
+    return handleMergePR(dependencies, req, res)
   }
   if (url.pathname === "/healthz") {
     sendJson(res, 200, { ok: true })
@@ -459,11 +464,11 @@ function dashboardRateLimitPrefix(request: { force: boolean; quick: boolean }) {
   return "full"
 }
 
-function isOAuthConfigured(dependencies: HostedServerDependencies) {
+export function isOAuthConfigured(dependencies: HostedServerDependencies) {
   return Boolean(dependencies.clientId && dependencies.clientSecret)
 }
 
-function oauthUnavailablePayload() {
+export function oauthUnavailablePayload() {
   return {
     message: "GitHub OAuth is not configured. Open /:username to view a public profile dashboard.",
   }
@@ -502,7 +507,7 @@ function pruneExpiredRevocations() {
   }
 }
 
-function sendExpiredSession(dependencies: HostedServerDependencies, res: ServerResponse) {
+export function sendExpiredSession(dependencies: HostedServerDependencies, res: ServerResponse) {
   res.setHeader(
     "Set-Cookie",
     serializeCookie(SESSION_COOKIE, "", { maxAgeSeconds: 0, secure: dependencies.secureCookies })
@@ -594,13 +599,13 @@ function applySecurityHeaders(res: ServerResponse, secureCookies: boolean) {
   }
 }
 
-function sendJson(res: ServerResponse, status: number, payload: unknown) {
+export function sendJson(res: ServerResponse, status: number, payload: unknown) {
   res.statusCode = status
   res.setHeader("Content-Type", "application/json; charset=utf-8")
   res.end(JSON.stringify(payload))
 }
 
-function sendRateLimit(
+export function sendRateLimit(
   res: ServerResponse,
   limit: Extract<RateLimitResult, { allowed: false }>,
   options: { authHeader?: AuthHeader } = {}

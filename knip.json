@@ -6,5 +6,8 @@
     "*.config.{js,ts}",
     "scripts/**/*.mjs"
   ],
-  "ignoreDependencies": ["cloudflare"]
+  "ignoreDependencies": ["cloudflare"],
+  "ignoreIssues": {
+    "**/api.ts": ["exports", "types"]
+  }
 }
