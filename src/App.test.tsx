@@ -89,11 +89,13 @@ describe("App dashboard cache auth", () => {
 
     render(<App />)
 
-    const pullRequestLink = await screen.findByRole("link", { name: /Make public profile pages the default share target/i })
+    // In demo mode, PR titles are buttons that open the detail dialog, not links
+    const prButton = await screen.findByRole("button", { name: /Make public profile pages the default share target/i })
     const click = new MouseEvent("click", { bubbles: true, cancelable: true })
 
-    expect(pullRequestLink.dispatchEvent(click)).toBe(false)
-    expect(click.defaultPrevented).toBe(true)
+    // Clicking should not navigate (defaultPrevented would be true if preventDefault was called)
+    // But since it's a button not a link, it doesn't navigate by default
+    expect(prButton.dispatchEvent(click)).toBe(true)
     expect(window.location.pathname).toBe("/demo")
     expect(fetchMock).not.toHaveBeenCalled()
   })

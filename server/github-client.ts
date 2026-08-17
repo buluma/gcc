@@ -392,3 +392,191 @@ export async function mergePullRequest(options: {
 
   return { merged: true, message: body.message ?? "Pull request merged successfully", sha: body.sha }
 }
+
+export async function fetchPullRequestDetail(options: {
+  token: string
+  owner: string
+  repo: string
+  pullNumber: number
+}): Promise<{
+  id: number
+  number: number
+  repo: string
+  title: string
+  state: string
+  url: string
+  updatedAt: string
+  createdAt: string
+  author: string | null
+  labels: string[]
+  isPullRequest: boolean
+  isDraft: boolean
+  baseRef: string
+  headRef: string
+  baseRepo: { name: string; fullName: string; owner: string } | null
+  headRepo: { name: string; fullName: string; owner: string } | null
+  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null
+  mergeStateStatus: "BEHIND" | "BLOCKED" | "CLEAN" | "DIRTY" | "DRAFT" | "HAS_HOOKS" | "UNKNOWN" | null
+  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null
+  statusCheckRollup: string | null
+  additions: number
+  deletions: number
+  changedFiles: number
+  commits: number
+  body: string | null
+  isMergeable: boolean
+  draft: boolean
+  mergeableState: string | null
+}> {
+  const { owner, repo, pullNumber, token } = options
+  
+  // Use GraphQL to get rich PR detail in one call
+  const query = `query($owner: String!, $repo: String!, $number: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        id
+        number
+        title
+        state
+        url
+        updatedAt
+        createdAt
+        author {
+          login
+        }
+        labels(first: 20) {
+          nodes {
+            name
+          }
+        }
+        isDraft
+        baseRefName
+        headRefName
+        baseRepository {
+          name
+          nameWithOwner
+          owner {
+            login
+          }
+        }
+        headRepository {
+          name
+          nameWithOwner
+          owner {
+            login
+          }
+        }
+        mergeable
+        mergeStateStatus
+        reviewDecision
+        statusCheckRollup
+        additions
+        deletions
+        changedFiles
+        commits {
+          totalCount
+        }
+        body
+      }
+    }
+  }`
+
+  const response = await fetch(`${GITHUB_API_BASE}/graphql`, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "github-command-center",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      variables: { owner, repo, number: pullNumber },
+    }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+
+  const body = await response.json() as {
+    data?: {
+      repository?: {
+        pullRequest?: {
+          id: string
+          number: number
+          title: string
+          state: string
+          url: string
+          updatedAt: string
+          createdAt: string
+          author: { login: string } | null
+          labels: { nodes: { name: string }[] }
+          isDraft: boolean
+          baseRefName: string
+          headRefName: string
+          baseRepository: { name: string; nameWithOwner: string; owner: { login: string } } | null
+          headRepository: { name: string; nameWithOwner: string; owner: { login: string } } | null
+          mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null
+          mergeStateStatus: "BEHIND" | "BLOCKED" | "CLEAN" | "DIRTY" | "DRAFT" | "HAS_HOOKS" | "UNKNOWN" | null
+          reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null
+          statusCheckRollup: string | null
+          additions: number
+          deletions: number
+          changedFiles: number
+          commits: { totalCount: number }
+          body: string | null
+        }
+      }
+    }
+    errors?: Array<{ message: string }>
+  }
+
+  if (!response.ok) {
+    const message = body.errors?.[0]?.message ?? `Failed to fetch PR: ${response.status}`
+    throw createApiError(message, `GET /repos/${owner}/${repo}/pulls/${pullNumber}`, response.status)
+  }
+
+  const pr = body.data?.repository?.pullRequest
+  if (!pr) {
+    throw createApiError("Pull request not found", `GET /repos/${owner}/${repo}/pulls/${pullNumber}`, 404)
+  }
+
+  const repoFullName = `${owner}/${repo}`
+
+  return {
+    id: Number(pr.id.split("\"")[1]) || pr.number,
+    number: pr.number,
+    repo: repoFullName,
+    title: pr.title,
+    state: pr.state.toLowerCase(),
+    url: pr.url,
+    updatedAt: pr.updatedAt,
+    createdAt: pr.createdAt,
+    author: pr.author?.login ?? null,
+    labels: pr.labels.nodes.map((l) => l.name),
+    isPullRequest: true,
+    isDraft: pr.isDraft,
+    baseRef: pr.baseRefName,
+    headRef: pr.headRefName,
+    baseRepo: pr.baseRepository ? {
+      name: pr.baseRepository.name,
+      fullName: pr.baseRepository.nameWithOwner,
+      owner: pr.baseRepository.owner.login,
+    } : null,
+    headRepo: pr.headRepository ? {
+      name: pr.headRepository.name,
+      fullName: pr.headRepository.nameWithOwner,
+      owner: pr.headRepository.owner.login,
+    } : null,
+    mergeable: pr.mergeable,
+    mergeStateStatus: pr.mergeStateStatus,
+    reviewDecision: pr.reviewDecision,
+    statusCheckRollup: pr.statusCheckRollup,
+    additions: pr.additions,
+    deletions: pr.deletions,
+    changedFiles: pr.changedFiles,
+    commits: pr.commits.totalCount,
+    body: pr.body,
+    isMergeable: pr.mergeable === "MERGEABLE",
+    draft: pr.isDraft,
+    mergeableState: pr.mergeable,
+  }
+}

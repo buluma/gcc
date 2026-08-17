@@ -188,6 +188,10 @@ async function handleRequest(
     return
   }
 
+  if (url.pathname.startsWith("/api/pr-detail/")) {
+    return handlePullRequestDetail(dependencies, req, res, url)
+  }
+
   return serveStatic(dependencies, res, url.pathname, req.method === "HEAD")
 }
 
@@ -285,6 +289,84 @@ async function handleCallback(
   } catch (error) {
     dependencies.logger.error("OAuth callback failed:", error)
     sendJson(res, 502, { message: "GitHub sign-in failed. Try again at /auth/login." })
+  }
+}
+
+async function handlePullRequestDetail(
+  dependencies: HostedServerDependencies,
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+) {
+  if (!isOAuthConfigured(dependencies)) {
+    res.setHeader("x-gcc-auth", "oauth")
+    sendJson(res, 503, oauthUnavailablePayload())
+    return
+  }
+
+  const cookies = parseCookies(req.headers.cookie)
+  const session = cookies[SESSION_COOKIE] ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey) : null
+
+  if (!session) {
+    res.setHeader("x-gcc-auth", "oauth")
+    sendJson(res, 401, { message: "Sign in with GitHub to view PR details.", loginUrl: "/auth/login" })
+    return
+  }
+
+  if (isSessionIdRevoked(session.id)) {
+    sendExpiredSession(dependencies, res)
+    return
+  }
+
+  // Rate limit PR detail requests
+  const limit = dependencies.rateLimiters.fullDashboard.check(`pr-detail:${session.login}`)
+  if (!limit.allowed) {
+    sendRateLimit(res, limit, { authHeader: "oauth" })
+    return
+  }
+
+  // Parse path: /api/pr-detail/:owner/:repo/:number
+  const pathParts = url.pathname.split("/").filter(Boolean)
+  if (pathParts.length !== 5 || pathParts[0] !== "api" || pathParts[1] !== "pr-detail") {
+    sendJson(res, 400, { message: "Invalid PR detail path. Expected /api/pr-detail/:owner/:repo/:number" })
+    return
+  }
+
+  const owner = pathParts[2]
+  const repo = pathParts[3]
+  const pullNumber = Number(pathParts[4])
+
+  if (!owner || !repo || !Number.isFinite(pullNumber)) {
+    sendJson(res, 400, { message: "Missing required path parameters: owner, repo, pullNumber" })
+    return
+  }
+
+  try {
+    const { fetchPullRequestDetail } = await import("./github-client.ts")
+    const detail = await fetchPullRequestDetail({
+      token: session.token,
+      owner,
+      repo,
+      pullNumber,
+    })
+    res.setHeader("x-gcc-auth", "oauth")
+    sendJson(res, 200, detail)
+  } catch (error) {
+    const status = (error as { status?: number }).status
+    if (status === 401) {
+      sendExpiredSession(dependencies, res)
+      return
+    }
+    if (status === 404) {
+      sendJson(res, 404, { message: "Pull request not found." })
+      return
+    }
+    if (status === 403) {
+      sendJson(res, 403, { message: "Insufficient permissions to view this pull request." })
+      return
+    }
+    dependencies.logger.error("Fetch PR detail failed:", error)
+    sendJson(res, 500, { message: "Failed to fetch PR details. Try again shortly." })
   }
 }
 
