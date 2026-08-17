@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- Update ci.yml [\#8](https://github.com/buluma/gcc/pull/8) ([buluma](https://github.com/buluma))
 - fix ci [\#7](https://github.com/buluma/gcc/pull/7) ([buluma](https://github.com/buluma))
 - bump actions [\#6](https://github.com/buluma/gcc/pull/6) ([buluma](https://github.com/buluma))
 - Revert "Bump sharp and wrangler" [\#5](https://github.com/buluma/gcc/pull/5) ([buluma](https://github.com/buluma))
