@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- ci: add Docker build and push workflow [\#12](https://github.com/buluma/gcc/pull/12) ([buluma](https://github.com/buluma))
 - feat: add PR merge capability [\#11](https://github.com/buluma/gcc/pull/11) ([buluma](https://github.com/buluma))
 - test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
 
