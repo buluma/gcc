@@ -347,19 +347,29 @@ function getStaleCache(scanLimit: number): DashboardPayload | null {
     area: "stale-cache",
     message: "GitHub API is temporarily unavailable. Showing cached data.",
   };
-  const fullCache = fullCaches.get(currentCacheKey());
-  if (fullCache && fullCache.payload.scanLimit === scanLimit)
-    return {
-      ...fullCache.payload,
-      warnings: [...fullCache.payload.warnings, staleWarning],
-    };
-  const quickCache = quickCaches.get(currentCacheKey());
-  if (quickCache && quickCache.payload.scanLimit === scanLimit)
-    return {
-      ...quickCache.payload,
-      warnings: [...quickCache.payload.warnings, staleWarning],
-    };
-  return null;
+
+  let best: { timestamp: number; payload: DashboardPayload } | null = null;
+  for (const entry of fullCaches.values()) {
+    if (
+      entry.payload.scanLimit === scanLimit &&
+      (!best || entry.timestamp > best.timestamp)
+    ) {
+      best = entry;
+    }
+  }
+  for (const entry of quickCaches.values()) {
+    if (
+      entry.payload.scanLimit === scanLimit &&
+      (!best || entry.timestamp > best.timestamp)
+    ) {
+      best = entry;
+    }
+  }
+  if (!best) return null;
+  return {
+    ...best.payload,
+    warnings: [...best.payload.warnings, staleWarning],
+  };
 }
 
 async function loadGithubDashboard({
