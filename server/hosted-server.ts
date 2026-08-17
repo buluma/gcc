@@ -183,10 +183,6 @@ async function handleRequest(
       throw error
     }
   }
-  const isMergePrPost = url.pathname === "/api/merge-pr" && (req as IncomingMessage).method === "POST"
-  if (isMergePrPost) {
-    return handleMergePR(dependencies, req, res)
-  }
   if (url.pathname === "/healthz") {
     sendJson(res, 200, { ok: true })
     return
