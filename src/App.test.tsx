@@ -71,7 +71,7 @@ describe("App dashboard cache auth", () => {
 
     render(<App />)
 
-    expect(await screen.findByText("GCC")).toBeTruthy()
+    expect(await screen.findByText("okgithub")).toBeTruthy()
     expect(screen.getByRole("region", { name: "Repositories" }).querySelector('button[title="okgithub/command-center"]')).toBeTruthy()
     expect(screen.getByText("Make public profile pages the default share target")).toBeTruthy()
     expect(screen.getByText("Add demo route and homepage link")).toBeTruthy()
