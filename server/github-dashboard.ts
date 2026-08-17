@@ -39,6 +39,14 @@ const RECENT_REPO_ACTIVITY_MS = 7 * 24 * 60 * 60_000;
 const REPO_DETAILS_CACHE_PATH =
   process.env.GITHUB_COMMAND_CENTER_REPO_CACHE ||
   join(process.cwd(), ".cache", "github-command-center", "repo-details.json");
+const DASHBOARD_CACHE_PATH =
+  process.env.GITHUB_COMMAND_CENTER_DASHBOARD_CACHE ||
+  join(
+    process.cwd(),
+    ".cache",
+    "github-command-center",
+    "dashboard-cache.json",
+  );
 const MAX_BUFFER = 32 * 1024 * 1024;
 const GRAPHQL_REPO_PAGE_SIZE = 50;
 const MAX_GRAPHQL_REPO_PAGES = 20;
@@ -59,6 +67,12 @@ const inFlightDashboards = new Map<string, Promise<DashboardPayload>>();
 const repoDetailsCaches = new Map<string, RepoDetailsCacheFile>();
 let localRepoDetailsCacheLoaded = false;
 let skipRepoDetailsCacheWrites = false;
+
+type DashboardCacheFile = {
+  full?: CacheEntry;
+  quick?: CacheEntry;
+};
+let localDashboardCacheLoaded = false;
 
 type AuthContext = {
   executor: GhExecutor;
@@ -287,6 +301,7 @@ async function getGithubDashboardInner(
   try {
     return await promise;
   } catch (error) {
+    await loadDashboardCache();
     const stale = getStaleCache(scanLimit);
     if (stale) return stale;
     throw error;
@@ -384,6 +399,7 @@ async function loadGithubDashboard({
   if (quick) {
     const payload = await getQuickDashboard(scanLimit);
     boundedMapSet(quickCaches, currentCacheKey(), { timestamp: now, payload });
+    await saveDashboardCache();
     return payload;
   }
 
@@ -484,6 +500,7 @@ async function loadGithubDashboard({
   };
 
   boundedMapSet(fullCaches, currentCacheKey(), { timestamp: now, payload });
+  await saveDashboardCache();
   return payload;
 }
 
@@ -810,6 +827,56 @@ async function writeRepoDetailsCache(cache: RepoDetailsCacheFile) {
     await writeFile(REPO_DETAILS_CACHE_PATH, JSON.stringify(cache, null, 2));
   } catch {
     // Repo detail caching is best-effort. A dashboard fetch should still render.
+  }
+}
+
+async function loadDashboardCache(): Promise<DashboardCacheFile> {
+  if (localDashboardCacheLoaded) {
+    const full = fullCaches.get(LOCAL_CACHE_KEY);
+    const quick = quickCaches.get(LOCAL_CACHE_KEY);
+    return { full: full ?? undefined, quick: quick ?? undefined };
+  }
+  localDashboardCacheLoaded = true;
+  try {
+    const parsed = JSON.parse(
+      await readFile(DASHBOARD_CACHE_PATH, "utf8"),
+    ) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const file = parsed as Record<string, unknown>;
+      if (
+        file.full &&
+        typeof file.full === "object" &&
+        "payload" in (file.full as Record<string, unknown>)
+      )
+        fullCaches.set(LOCAL_CACHE_KEY, file.full as CacheEntry);
+      if (
+        file.quick &&
+        typeof file.quick === "object" &&
+        "payload" in (file.quick as Record<string, unknown>)
+      )
+        quickCaches.set(LOCAL_CACHE_KEY, file.quick as CacheEntry);
+    }
+  } catch {
+    // Missing or corrupt cache file is expected on first run.
+  }
+  const full = fullCaches.get(LOCAL_CACHE_KEY);
+  const quick = quickCaches.get(LOCAL_CACHE_KEY);
+  return { full: full ?? undefined, quick: quick ?? undefined };
+}
+
+async function saveDashboardCache() {
+  if (currentCacheKey() !== LOCAL_CACHE_KEY) return;
+  const full = fullCaches.get(LOCAL_CACHE_KEY);
+  const quick = quickCaches.get(LOCAL_CACHE_KEY);
+  if (!full && !quick) return;
+  try {
+    await mkdir(dirname(DASHBOARD_CACHE_PATH), { recursive: true });
+    const file: DashboardCacheFile = {};
+    if (full) file.full = full;
+    if (quick) file.quick = quick;
+    await writeFile(DASHBOARD_CACHE_PATH, JSON.stringify(file));
+  } catch {
+    // Dashboard caching is best-effort. Stale data is better than no data.
   }
 }
 
@@ -1388,6 +1455,7 @@ export function configureGithubDashboardForTests(executor: GhExecutor | null) {
   if (executor)
     repoDetailsCaches.set(LOCAL_CACHE_KEY, createEmptyRepoDetailsCache());
   localRepoDetailsCacheLoaded = Boolean(executor);
+  localDashboardCacheLoaded = Boolean(executor);
   skipRepoDetailsCacheWrites = Boolean(executor);
   inFlightDashboards.clear();
 }
