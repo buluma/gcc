@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased](https://github.com/buluma/gcc/tree/HEAD)
+
+[Full Changelog](https://github.com/buluma/gcc/compare/v0.2.0...HEAD)
+
+**Merged pull requests:**
+
+- feat: add PR details view in a pop-up dialog [\#14](https://github.com/buluma/gcc/pull/14) ([buluma](https://github.com/buluma))
+
 ## [v0.2.0](https://github.com/buluma/gcc/tree/v0.2.0) (2026-08-17)
 
 [Full Changelog](https://github.com/buluma/gcc/compare/v0.1.0...v0.2.0)
