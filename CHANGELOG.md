@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased](https://github.com/buluma/gcc/tree/HEAD)
+## [v0.2.0](https://github.com/buluma/gcc/tree/v0.2.0) (2026-08-17)
 
-[Full Changelog](https://github.com/buluma/gcc/compare/v0.1.0...HEAD)
+[Full Changelog](https://github.com/buluma/gcc/compare/v0.1.0...v0.2.0)
 
 **Merged pull requests:**
 
