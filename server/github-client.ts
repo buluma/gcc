@@ -2,7 +2,25 @@ const GITHUB_API_BASE = "https://api.github.com"
 const REQUEST_TIMEOUT_MS = 30_000
 const MAX_PAGINATED_PAGES = 10
 
+let lastRateLimitInfo: RateLimitInfo | null = null
+
+export function getLastRateLimitInfo(): RateLimitInfo | null {
+  return lastRateLimitInfo
+}
+
+export function clearLastRateLimitInfo(): void {
+  lastRateLimitInfo = null
+}
+
 export type GhExecutor = (args: string[], endpoint: string) => Promise<string>
+
+export type RateLimitInfo = {
+  limit: number
+  remaining: number
+  resetAt: string
+  used: number
+}
+
 export type GithubApiError = Error & {
   stderr?: string
   endpoint?: string
@@ -10,6 +28,7 @@ export type GithubApiError = Error & {
   code?: "github_rate_limit"
   retryAfterSeconds?: number
   retryAt?: string
+  rateLimit?: RateLimitInfo
 }
 
 export class PaginationLimitError extends Error {
@@ -196,6 +215,20 @@ async function githubFetch(
       retryAfterSeconds,
       retryAt: retryAfterSeconds ? new Date(Date.now() + retryAfterSeconds * 1000).toISOString() : undefined,
     } : undefined)
+  }
+
+  // Capture rate limit headers from successful responses
+  const limit = Number(response.headers.get("x-ratelimit-limit"))
+  const remaining = Number(response.headers.get("x-ratelimit-remaining"))
+  const reset = Number(response.headers.get("x-ratelimit-reset"))
+  const used = Number(response.headers.get("x-ratelimit-used"))
+  if (Number.isFinite(limit) && Number.isFinite(remaining) && Number.isFinite(reset)) {
+    lastRateLimitInfo = {
+      limit,
+      remaining,
+      resetAt: new Date(reset * 1000).toISOString(),
+      used: Number.isFinite(used) ? used : limit - remaining,
+    }
   }
 
   return response

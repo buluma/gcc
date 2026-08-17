@@ -3,7 +3,7 @@ import { execFile } from "node:child_process"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 
-import { createPublicExecutor, createTokenExecutor, isPaginationLimitError, type GhExecutor } from "./github-client.ts"
+import { createPublicExecutor, createTokenExecutor, isPaginationLimitError, type GhExecutor, getLastRateLimitInfo, clearLastRateLimitInfo } from "./github-client.ts"
 import {
   normalizeGithubLogin,
   type DashboardLoaderOptions,
@@ -34,6 +34,8 @@ const REPO_DETAILS_CACHE_PATH = process.env.GITHUB_COMMAND_CENTER_REPO_CACHE
 const MAX_BUFFER = 32 * 1024 * 1024
 const GRAPHQL_REPO_PAGE_SIZE = 50
 const MAX_GRAPHQL_REPO_PAGES = 20
+const DASHBOARD_TIMEOUT_MS = 15_000
+const RATE_LIMIT_WARNING_THRESHOLD = 100
 
 type CacheEntry = {
   timestamp: number
@@ -76,6 +78,15 @@ function boundedMapSet<T>(map: Map<string, T>, key: string, value: T) {
     if (oldest !== undefined) map.delete(oldest)
   }
   map.set(key, value)
+}
+
+function promiseAllWithTimeout<T extends readonly unknown[]>(promises: [...{ [K in keyof T]: Promise<T[K]> }], timeoutMs: number): Promise<T> {
+  return Promise.race([
+    Promise.all(promises) as Promise<T>,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Dashboard request timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ])
 }
 
 type GhError = Error & {
@@ -320,14 +331,38 @@ async function loadGithubDashboard({
   }))
   const scanRepos = enrichedRepos.slice(0, scanLimit)
 
-  const [repoDetails, runs, pullRequests, issues, billing] = await Promise.all([
+  const [repoDetails, runs, pullRequests, issues, billing] = await promiseAllWithTimeout([
     getPerRepoLatestDetails(enrichedRepos, scanRepos, warnings, now),
     getWorkflowRuns(scanRepos, warnings),
     getSearchItems(`is:pr involves:${viewer.login} archived:false`, true, warnings),
     getSearchItems(`is:issue involves:${viewer.login} archived:false`, false, warnings),
     getBilling(viewer.login, warnings),
-  ])
+  ], DASHBOARD_TIMEOUT_MS)
+    .catch((): [Map<string, RepoLatestDetails>, WorkflowRunSummary[], IssueSummary[], IssueSummary[], BillingSummary] => {
+      warnings.push({
+        area: "dashboard",
+        message: `Dashboard request timed out after ${DASHBOARD_TIMEOUT_MS / 1000}s. Partial results shown.`,
+      })
+      return [
+        new Map<string, RepoLatestDetails>(),
+        [] as WorkflowRunSummary[],
+        [] as IssueSummary[],
+        [] as IssueSummary[],
+        createUnavailableBillingSummary(new Date().getFullYear(), new Date().getMonth() + 1, "Billing unavailable due to timeout."),
+      ] as const
+    })
   const commits = getRecentCommitsFromRepoDetails(enrichedRepos, repoDetails)
+
+  // Check rate limit and warn if low
+  const rateLimit = getLastRateLimitInfo()
+  if (rateLimit && rateLimit.remaining < RATE_LIMIT_WARNING_THRESHOLD) {
+    warnings.push({
+      area: "rate limit",
+      message: `GitHub API rate limit low: ${rateLimit.remaining}/${rateLimit.limit} remaining. Resets at ${new Date(rateLimit.resetAt).toLocaleTimeString()}.`,
+      fix: "Wait for reset or use a personal token with higher quota.",
+    })
+  }
+  clearLastRateLimitInfo()
 
   const runsByRepo = new Map<string, WorkflowRunSummary>()
   for (const run of runs) {
