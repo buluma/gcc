@@ -469,7 +469,9 @@ export async function fetchPullRequestDetail(options: {
         mergeable
         mergeStateStatus
         reviewDecision
-        statusCheckRollup
+        statusCheckRollup {
+          state
+        }
         additions
         deletions
         changedFiles
@@ -517,7 +519,7 @@ export async function fetchPullRequestDetail(options: {
           mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null
           mergeStateStatus: "BEHIND" | "BLOCKED" | "CLEAN" | "DIRTY" | "DRAFT" | "HAS_HOOKS" | "UNKNOWN" | null
           reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null
-          statusCheckRollup: string | null
+          statusCheckRollup: { state: string } | null
           additions: number
           deletions: number
           changedFiles: number
@@ -532,6 +534,11 @@ export async function fetchPullRequestDetail(options: {
   if (!response.ok) {
     const message = body.errors?.[0]?.message ?? `Failed to fetch PR: ${response.status}`
     throw createApiError(message, `GET /repos/${owner}/${repo}/pulls/${pullNumber}`, response.status)
+  }
+
+  if (body.errors?.length) {
+    const message = body.errors[0]?.message ?? "GraphQL query failed"
+    throw createApiError(message, `GET /repos/${owner}/${repo}/pulls/${pullNumber}`, 400)
   }
 
   const pr = body.data?.repository?.pullRequest
@@ -569,7 +576,7 @@ export async function fetchPullRequestDetail(options: {
     mergeable: pr.mergeable,
     mergeStateStatus: pr.mergeStateStatus,
     reviewDecision: pr.reviewDecision,
-    statusCheckRollup: pr.statusCheckRollup,
+    statusCheckRollup: pr.statusCheckRollup?.state ?? null,
     additions: pr.additions,
     deletions: pr.deletions,
     changedFiles: pr.changedFiles,
