@@ -95,7 +95,7 @@ export function PRDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh]">
+      <DialogContent className="max-h-[90vh]" style={{ maxWidth: "90vw" }}>
         <DialogHeader>
           {loading ? (
             <div className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export function PRDetailsDialog({
                 {detail.body && (
                   <div className="border-t pt-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Description</p>
-                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">{detail.body}</div>
+                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">{detail.body}</div>
                   </div>
                 )}
               </TabsContent>
