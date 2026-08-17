@@ -33,7 +33,7 @@ export function Homepage({
         <header className="flex items-center pt-9">
           <a href="/" className="flex items-center gap-[9px] text-[17px] leading-none font-semibold" aria-label="okgithub home">
             <GitHubIcon className="size-7" aria-hidden="true" />
-            okgithub
+            GCC
           </a>
           <div className="flex-1" />
           <Button
