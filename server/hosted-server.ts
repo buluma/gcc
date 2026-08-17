@@ -327,7 +327,7 @@ async function handlePullRequestDetail(
 
   // Parse path: /api/pr-detail/:owner/:repo/:number
   const pathParts = url.pathname.split("/").filter(Boolean)
-  if (pathParts.length !== 4 || pathParts[0] !== "api" || pathParts[1] !== "pr-detail") {
+  if (pathParts.length !== 5 || pathParts[0] !== "api" || pathParts[1] !== "pr-detail") {
     sendJson(res, 400, { message: "Invalid PR detail path. Expected /api/pr-detail/:owner/:repo/:number" })
     return
   }
