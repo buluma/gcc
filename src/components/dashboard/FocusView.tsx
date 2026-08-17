@@ -55,6 +55,7 @@ export function FocusView({
   onScopeChange,
   onSelectRepo,
   onToggleRepoHidden,
+  onOpenPRDetail,
 }: {
   repos: RepoSummary[]
   scope: RepoScope
@@ -70,6 +71,7 @@ export function FocusView({
   onScopeChange: (scope: RepoScope) => void
   onSelectRepo: (fullName: string | null) => void
   onToggleRepoHidden: (id: number) => void
+  onOpenPRDetail: (owner: string, repo: string, number: number) => void
 }) {
   const [prState, setPrState] = useState<PullRequestStateFilter>("all")
   const [issueState, setIssueState] = useState<IssueStateFilter>("all")
@@ -125,7 +127,15 @@ export function FocusView({
             {selectedRepo ? ` in ${shortRepoName(selectedRepo, viewerLogin)}` : ""}
           </FeedNote>
         ) : (
-          scopedPullRequests.map((item) => <FeedIssueRow key={item.id} item={item} icon={GitPullRequestIcon} viewerLogin={viewerLogin} />)
+          scopedPullRequests.map((item) => (
+            <FeedIssueRow
+              key={item.id}
+              item={item}
+              icon={GitPullRequestIcon}
+              viewerLogin={viewerLogin}
+              onOpenPRDetail={onOpenPRDetail}
+            />
+          ))
         )}
       </FeedCard>
       <div className="grid min-h-0 gap-3 lg:col-start-2 xl:col-start-3 xl:grid-rows-2">
@@ -408,10 +418,12 @@ function FeedIssueRow({
   item,
   icon: Icon,
   viewerLogin,
+  onOpenPRDetail,
 }: {
   item: IssueSummary
   icon: typeof CircleDotIcon
   viewerLogin: string
+  onOpenPRDetail?: (owner: string, repo: string, number: number) => void
 }) {
   const [isMerging, setIsMerging] = useState(false)
 
@@ -445,6 +457,14 @@ function FeedIssueRow({
         target="_blank"
         rel="noreferrer"
         className="min-w-0"
+        onClick={(e) => {
+          if (item.isPullRequest && onOpenPRDetail) {
+            e.preventDefault()
+            e.stopPropagation()
+            const [owner, repo] = item.repo.split("/")
+            onOpenPRDetail(owner, repo, item.number)
+          }
+        }}
       >
         <span className="block truncate font-medium leading-4">{item.title}</span>
         <span className="block truncate text-[11px] leading-4 text-muted-foreground">

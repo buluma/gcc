@@ -3,6 +3,7 @@ import { LogOutIcon, MoonIcon, RefreshCcwIcon, SearchIcon, SunIcon, XIcon } from
 
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton"
 import { FocusView, type RepoScope } from "@/components/dashboard/FocusView"
+import { PRDetailsDialog } from "@/components/dashboard/PRDetailsDialog"
 import { OperationalRail } from "@/components/dashboard/OperationalRail"
 import { GitHubIcon } from "@/components/icons/GitHubIcon"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -185,6 +186,7 @@ export default function DashboardPage({
   const [ciState, setCiState] = useState("all")
   const [repoScope, setRepoScope] = useState<RepoScope>("active")
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
+  const [prDetail, setPrDetail] = useState<{ owner: string; repo: string; number: number } | null>(null)
   const [authMode, setAuthMode] = useState<AuthMode>(() => demoMode ? "demo" : publicUsername ? "public" : "local")
   const [needsLogin, setNeedsLogin] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -356,6 +358,10 @@ export default function DashboardPage({
     setRepoScope(value)
   }, [])
 
+  const handleOpenPRDetail = useCallback((owner: string, repo: string, number: number) => {
+    setPrDetail({ owner, repo, number })
+  }, [])
+
   const handleDemoLinkClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (!demoMode) return
     const target = event.target
@@ -426,6 +432,7 @@ export default function DashboardPage({
                         onScopeChange={handleRepoScopeChange}
                         onSelectRepo={setSelectedRepo}
                         onToggleRepoHidden={toggleRepoHidden}
+                        onOpenPRDetail={handleOpenPRDetail}
                       />
                       <OperationalRail
                         billing={data.billing}
@@ -443,6 +450,14 @@ export default function DashboardPage({
               </DashboardPreferences>
             ) : null}
           </div>
+          <PRDetailsDialog
+            open={!!prDetail}
+            onOpenChange={(open) => !open && setPrDetail(null)}
+            owner={prDetail?.owner ?? ""}
+            repo={prDetail?.repo ?? ""}
+            pullNumber={prDetail?.number ?? 0}
+            viewerLogin={data?.viewer.login ?? ""}
+          />
       </main>
     </div>
   )
