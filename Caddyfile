@@ -1,0 +1,31 @@
+# Caddyfile for github-command-center
+# Provides automatic HTTPS via Let's Encrypt
+# Place at ./Caddyfile and uncomment caddy service in docker-compose.yml
+
+{
+    admin off
+    https_port 443
+    http_port 80
+}
+
+{$DOMAIN} {
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy no-referrer
+        Strict-Transport-Security max-age=31536000
+    }
+
+    # Proxy to app
+    reverse_proxy github-command-center:3000 {
+        header_up Host {host}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote}
+    }
+
+    # Health check bypass
+    @health path /healthz
+    respond @health 200
+}
