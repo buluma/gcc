@@ -24,15 +24,12 @@ function createMemoryStorage(): Storage {
 }
 
 function ensureStorage(name: "localStorage" | "sessionStorage") {
-  try {
-    if (window[name]) return
-  } catch {
-    // Access can throw for opaque origins; replace it below.
-  }
-
+  const storage = createMemoryStorage()
   Object.defineProperty(window, name, {
     configurable: true,
-    value: createMemoryStorage(),
+    enumerable: true,
+    writable: true,
+    value: storage,
   })
 }
 

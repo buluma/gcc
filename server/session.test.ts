@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { createCipheriv, randomBytes } from "node:crypto"
+import { createCipheriv } from "node:crypto"
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -19,7 +19,8 @@ function createKey() {
 }
 
 function sealPlaintext(plaintext: string, key: Buffer): string {
-  const iv = randomBytes(12)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const iv = (require("node:crypto").randomBytes(12) as Buffer)
   const cipher = createCipheriv("aes-256-gcm", key, iv)
   const encrypted = Buffer.concat([cipher.update(Buffer.from(plaintext, "utf8")), cipher.final()])
   const tag = cipher.getAuthTag()

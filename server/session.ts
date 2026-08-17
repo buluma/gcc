@@ -1,4 +1,10 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto"
+import { createHash, createCipheriv, createDecipheriv } from "node:crypto"
+import { createRequire } from "node:module"
+
+function getRandomBytes(size: number): Buffer {
+  const crypto = createRequire(import.meta.url)("node:crypto")
+  return crypto.randomBytes(size)
+}
 
 const ALGORITHM = "aes-256-gcm"
 const IV_LENGTH = 12
@@ -16,7 +22,7 @@ export function deriveSessionKey(secret: string): Buffer {
 }
 
 export function sealSession(session: Session, key: Buffer): string {
-  const iv = randomBytes(IV_LENGTH)
+  const iv = getRandomBytes(IV_LENGTH)
   const cipher = createCipheriv(ALGORITHM, key, iv)
   const plaintext = Buffer.from(JSON.stringify(session), "utf8")
   const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()])

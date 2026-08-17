@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto"
 import { createServer } from "node:http"
 
 import { getGithubDashboard, getPublicGithubDashboard } from "./github-dashboard.ts"
@@ -6,6 +5,12 @@ import { exchangeOAuthCode, fetchViewerLogin, revokeOAuthToken } from "./github-
 import { createHostedRequestHandler, type HostedServerDependencies } from "./hosted-server.ts"
 import { createHostedRateLimiters } from "./rate-limit.ts"
 import { deriveSessionKey } from "./session.ts"
+import { createRequire } from "node:module"
+
+function getRandomBytes(size: number): Buffer {
+  const crypto = createRequire(import.meta.url)("node:crypto")
+  return crypto.randomBytes(size)
+}
 
 type HostedStaticFiles = Pick<HostedServerDependencies, "readFile" | "stat">
 
@@ -30,7 +35,7 @@ export function createHostedAppServer(options: HostedAppServerOptions) {
     throw new Error("Missing required environment variable SESSION_SECRET for OAuth sessions. See .env.example.")
   }
 
-  const sessionSecret = options.sessionSecret || randomBytes(32).toString("hex")
+  const sessionSecret = options.sessionSecret || getRandomBytes(32).toString("hex")
   if (sessionSecret.length < 32) {
     throw new Error("SESSION_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32")
   }
