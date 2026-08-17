@@ -1,0 +1,12 @@
+.git
+.cache
+.claude
+dist
+node_modules
+coverage
+.env
+.env.*
+!.env.example
+docs
+AGENTS.md
+README.md

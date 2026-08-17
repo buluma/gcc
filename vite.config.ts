@@ -1,0 +1,62 @@
+import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite"
+import react from "@vitejs/plugin-react"
+import tailwindcss from "@tailwindcss/vite"
+import path from "node:path"
+import { getGithubDashboard, getPublicGithubDashboard } from "./server/github-dashboard"
+import { DashboardRequestError, parseDashboardRequest } from "./server/dashboard-request"
+import { isLocalDashboardRequest, LOCAL_DASHBOARD_ONLY_MESSAGE } from "./server/local-access"
+
+function installGithubDashboardApi(server: ViteDevServer | PreviewServer) {
+  server.middlewares.use("/api/dashboard", async (req, res, next) => {
+    if (req.method !== "GET") {
+      next()
+      return
+    }
+
+    if (!isLocalDashboardRequest(req)) {
+      res.statusCode = 403
+      res.setHeader("Content-Type", "application/json; charset=utf-8")
+      res.end(JSON.stringify({ message: LOCAL_DASHBOARD_ONLY_MESSAGE }))
+      return
+    }
+
+    try {
+      const url = new URL(req.url ?? "/", "http://localhost")
+      const dashboardRequest = parseDashboardRequest(url, "")
+      const payload = dashboardRequest.username
+        ? await getPublicGithubDashboard(dashboardRequest.username, dashboardRequest.options)
+        : await getGithubDashboard(dashboardRequest.options)
+
+      res.statusCode = 200
+      if (dashboardRequest.username) res.setHeader("x-gcc-auth", "public")
+      res.setHeader("Content-Type", "application/json; charset=utf-8")
+      res.end(JSON.stringify(payload))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Dashboard request failed."
+      res.statusCode = error instanceof DashboardRequestError ? error.status : 500
+      res.setHeader("Content-Type", "application/json; charset=utf-8")
+      res.end(JSON.stringify({ message }))
+    }
+  })
+}
+
+function githubDashboardApi(): Plugin {
+  return {
+    name: "github-dashboard-api",
+    configureServer(server: ViteDevServer) {
+      installGithubDashboardApi(server)
+    },
+    configurePreviewServer(server: PreviewServer) {
+      installGithubDashboardApi(server)
+    },
+  }
+}
+
+export default defineConfig({
+  plugins: [react(), tailwindcss(), githubDashboardApi()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+})
