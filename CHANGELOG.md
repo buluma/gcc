@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- refactor: improve codebase quality and UX [\#19](https://github.com/buluma/gcc/pull/19) ([buluma](https://github.com/buluma))
 - ci: only run Docker workflow on merge to master and version tags [\#18](https://github.com/buluma/gcc/pull/18) ([buluma](https://github.com/buluma))
 - fix: reduce PR detail dialog width to 70vw [\#17](https://github.com/buluma/gcc/pull/17) ([buluma](https://github.com/buluma))
 - fix: force PR detail dialog width and add description scroll [\#16](https://github.com/buluma/gcc/pull/16) ([buluma](https://github.com/buluma))
