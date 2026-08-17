@@ -1,42 +1,39 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { extname, join, normalize, parse, sep } from "node:path";
 
-import type { IncomingMessage, ServerResponse } from "node:http"
-import { extname, join, normalize, parse, sep } from "node:path"
-
-import { isGithubRateLimitError, type GithubApiError } from "./github-client.ts"
+import {
+  isGithubRateLimitError,
+  type GithubApiError,
+} from "./github-client.ts";
 import {
   DashboardRequestError,
   parseDashboardRequest,
   type DashboardLoader,
   type DashboardRequestOptions,
   type PublicDashboardLoader,
-} from "./dashboard-request.ts"
+} from "./dashboard-request.ts";
 import {
   openSession,
   parseCookies,
   sealSession,
   serializeCookie,
   type Session,
-} from "./session.ts"
+} from "./session.ts";
 import {
   RATE_LIMIT_MESSAGE,
   type HostedRateLimiters,
   type RateLimitResult,
-} from "./rate-limit.ts"
-import { handleMergePR } from "./merge-pr-handler.ts"
-import { createRequire } from "node:module"
+} from "./rate-limit.ts";
+import { handleMergePR } from "./merge-pr-handler.ts";
+import { getRandomBytes } from "./crypto.ts";
 
-function getRandomBytes(size: number): Buffer {
-  const crypto = createRequire(import.meta.url)("node:crypto")
-  return crypto.randomBytes(size)
-}
+export const OAUTH_SCOPES = "repo user";
+export const SESSION_COOKIE = "gcc_session";
+export const STATE_COOKIE = "gcc_oauth_state";
+export const SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
 
-export const OAUTH_SCOPES = "repo user"
-export const SESSION_COOKIE = "gcc_session"
-export const STATE_COOKIE = "gcc_oauth_state"
-export const SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60
-
-const revokedSessionIds = new Map<string, number>()
-const MAX_REVOKED_SESSION_IDS = 10_000
+const revokedSessionIds = new Map<string, number>();
+const MAX_REVOKED_SESSION_IDS = 10_000;
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -49,7 +46,7 @@ const CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
-].join("; ")
+].join("; ");
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -63,180 +60,204 @@ const CONTENT_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
   ".txt": "text/plain; charset=utf-8",
   ".map": "application/json",
-}
+};
 
 type StaticFileStat = {
-  isDirectory(): boolean
-}
+  isDirectory(): boolean;
+};
 
-type HostedLogger = Pick<Console, "error" | "warn">
-type AuthHeader = "oauth" | "public"
+type HostedLogger = Pick<Console, "error" | "warn">;
+type AuthHeader = "oauth" | "public";
 
 type PublicGithubRateLimitPayload = {
-  code: "github_rate_limit"
-  message: string
-  loginUrl?: string
-  retryAfterSeconds?: number
-  retryAt?: string
-}
+  code: "github_rate_limit";
+  message: string;
+  loginUrl?: string;
+  retryAfterSeconds?: number;
+  retryAt?: string;
+};
 
 export type HostedServerDependencies = {
-  baseUrl: string
-  clientId: string
-  clientSecret: string
-  distDir: string
-  sessionKey: Buffer
-  secureCookies: boolean
-  trustProxy?: boolean
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+  distDir: string;
+  sessionKey: Buffer;
+  secureCookies: boolean;
+  trustProxy?: boolean;
   exchangeOAuthCode(options: {
-    clientId: string
-    clientSecret: string
-    code: string
-    redirectUri: string
-  }): Promise<string>
-  fetchViewerLogin(token: string): Promise<string>
+    clientId: string;
+    clientSecret: string;
+    code: string;
+    redirectUri: string;
+  }): Promise<string>;
+  fetchViewerLogin(token: string): Promise<string>;
   revokeOAuthToken(options: {
-    clientId: string
-    clientSecret: string
-    token: string
-  }): Promise<void>
-  rateLimiters: HostedRateLimiters
-  loadDashboard: DashboardLoader
-  loadPublicDashboard: PublicDashboardLoader
-  readFile(path: string): Promise<Buffer>
-  stat(path: string): Promise<StaticFileStat>
-  logger: HostedLogger
-}
+    clientId: string;
+    clientSecret: string;
+    token: string;
+  }): Promise<void>;
+  rateLimiters: HostedRateLimiters;
+  loadDashboard: DashboardLoader;
+  loadPublicDashboard: PublicDashboardLoader;
+  readFile(path: string): Promise<Buffer>;
+  stat(path: string): Promise<StaticFileStat>;
+  logger: HostedLogger;
+};
 
 export function revokeSessionId(id: string, expiresAt: number) {
-  pruneExpiredRevocations()
-  if (expiresAt <= Date.now()) return
-  if (!revokedSessionIds.has(id) && revokedSessionIds.size >= MAX_REVOKED_SESSION_IDS) {
-    const oldest = revokedSessionIds.keys().next().value
-    if (oldest !== undefined) revokedSessionIds.delete(oldest)
+  pruneExpiredRevocations();
+  if (expiresAt <= Date.now()) return;
+  if (
+    !revokedSessionIds.has(id) &&
+    revokedSessionIds.size >= MAX_REVOKED_SESSION_IDS
+  ) {
+    const oldest = revokedSessionIds.keys().next().value;
+    if (oldest !== undefined) revokedSessionIds.delete(oldest);
   }
-  revokedSessionIds.set(id, expiresAt)
+  revokedSessionIds.set(id, expiresAt);
 }
 
 export function isSessionIdRevoked(id: string): boolean {
-  pruneExpiredRevocations()
-  return revokedSessionIds.has(id)
+  pruneExpiredRevocations();
+  return revokedSessionIds.has(id);
 }
 
-export function createHostedRequestHandler(dependencies: HostedServerDependencies) {
-  const baseUrl = dependencies.baseUrl.replace(/\/$/, "")
+export function createHostedRequestHandler(
+  dependencies: HostedServerDependencies,
+) {
+  const baseUrl = dependencies.baseUrl.replace(/\/$/, "");
 
   return (req: IncomingMessage, res: ServerResponse) => {
     void handleRequest(dependencies, baseUrl, req, res).catch((error) => {
-      dependencies.logger.error("Unhandled request error:", error)
+      dependencies.logger.error("Unhandled request error:", error);
       if (!res.headersSent) {
-        sendJson(res, 500, { message: "Internal server error." })
+        sendJson(res, 500, { message: "Internal server error." });
       } else {
-        res.end()
+        res.end();
       }
-    })
-  }
+    });
+  };
 }
 
 async function handleRequest(
   dependencies: HostedServerDependencies,
   baseUrl: string,
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
 ) {
-  const url = new URL(req.url ?? "/", baseUrl)
-  applySecurityHeaders(res, dependencies.secureCookies)
+  const url = new URL(req.url ?? "/", baseUrl);
+  applySecurityHeaders(res, dependencies.secureCookies);
 
   // Allow POST for merge PR endpoint
-  const isMergePrPost = url.pathname === "/api/merge-pr" && req.method === "POST"
+  const isMergePrPost =
+    url.pathname === "/api/merge-pr" && req.method === "POST";
   if (isMergePrPost) {
-    return handleMergePR(dependencies, req, res)
+    return handleMergePR(dependencies, req, res);
   }
 
   if (req.method !== "GET" && req.method !== "HEAD") {
-    res.setHeader("Allow", "GET, HEAD")
-    sendJson(res, 405, { message: "Method not allowed." })
-    return
+    res.setHeader("Allow", "GET, HEAD");
+    sendJson(res, 405, { message: "Method not allowed." });
+    return;
   }
 
   if (req.method === "HEAD" && isDashboardOrAuthPath(url.pathname)) {
-    res.setHeader("Allow", "GET")
-    sendJson(res, 405, { message: "Method not allowed." })
-    return
+    res.setHeader("Allow", "GET");
+    sendJson(res, 405, { message: "Method not allowed." });
+    return;
   }
 
-  if (url.pathname === "/auth/login") return handleLogin(dependencies, baseUrl, req, res)
-  if (url.pathname === "/auth/callback") return handleCallback(dependencies, baseUrl, req, res, url)
-  if (url.pathname === "/auth/logout") return handleLogout(dependencies, req, res)
+  if (url.pathname === "/auth/login")
+    return handleLogin(dependencies, baseUrl, req, res);
+  if (url.pathname === "/auth/callback")
+    return handleCallback(dependencies, baseUrl, req, res, url);
+  if (url.pathname === "/auth/logout")
+    return handleLogout(dependencies, req, res);
   if (isDashboardPath(url.pathname)) {
     try {
-      const dashboardRequest = parseDashboardRequest(url, "/api/dashboard")
+      const dashboardRequest = parseDashboardRequest(url, "/api/dashboard");
       if (dashboardRequest.username) {
-        return handlePublicDashboard(dependencies, req, res, dashboardRequest.options, dashboardRequest.username)
+        return handlePublicDashboard(
+          dependencies,
+          req,
+          res,
+          dashboardRequest.options,
+          dashboardRequest.username,
+        );
       }
-      return handleDashboard(dependencies, req, res, dashboardRequest.options)
+      return handleDashboard(dependencies, req, res, dashboardRequest.options);
     } catch (error) {
       if (error instanceof DashboardRequestError) {
-        sendJson(res, error.status, { message: error.message })
-        return
+        sendJson(res, error.status, { message: error.message });
+        return;
       }
-      throw error
+      throw error;
     }
   }
   if (url.pathname === "/healthz") {
-    sendJson(res, 200, { ok: true })
-    return
+    sendJson(res, 200, { ok: true });
+    return;
   }
 
   if (url.pathname.startsWith("/api/pr-detail/")) {
-    return handlePullRequestDetail(dependencies, req, res, url)
+    return handlePullRequestDetail(dependencies, req, res, url);
   }
 
-  return serveStatic(dependencies, res, url.pathname, req.method === "HEAD")
+  return serveStatic(dependencies, res, url.pathname, req.method === "HEAD");
 }
 
 function isDashboardOrAuthPath(pathname: string) {
-  return pathname === "/auth/login"
-    || pathname === "/auth/callback"
-    || pathname === "/auth/logout"
-    || isDashboardPath(pathname)
+  return (
+    pathname === "/auth/login" ||
+    pathname === "/auth/callback" ||
+    pathname === "/auth/logout" ||
+    isDashboardPath(pathname)
+  );
 }
 
 function isDashboardPath(pathname: string) {
-  return pathname === "/api/dashboard" || pathname.startsWith("/api/dashboard/")
+  return (
+    pathname === "/api/dashboard" || pathname.startsWith("/api/dashboard/")
+  );
 }
 
 function handleLogin(
   dependencies: HostedServerDependencies,
   baseUrl: string,
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
 ) {
   if (!isOAuthConfigured(dependencies)) {
-    sendJson(res, 503, oauthUnavailablePayload())
-    return
+    sendJson(res, 503, oauthUnavailablePayload());
+    return;
   }
 
-  const limit = dependencies.rateLimiters.auth.check(`auth:${remoteAddressBucket(req, dependencies.trustProxy ?? false)}`)
+  const limit = dependencies.rateLimiters.auth.check(
+    `auth:${remoteAddressBucket(req, dependencies.trustProxy ?? false)}`,
+  );
   if (!limit.allowed) {
-    sendRateLimit(res, limit)
-    return
+    sendRateLimit(res, limit);
+    return;
   }
 
-  const state = getRandomBytes(16).toString("hex")
-  const authorize = new URL("https://github.com/login/oauth/authorize")
-  authorize.searchParams.set("client_id", dependencies.clientId)
-  authorize.searchParams.set("redirect_uri", `${baseUrl}/auth/callback`)
-  authorize.searchParams.set("scope", OAUTH_SCOPES)
-  authorize.searchParams.set("state", state)
+  const state = getRandomBytes(16).toString("hex");
+  const authorize = new URL("https://github.com/login/oauth/authorize");
+  authorize.searchParams.set("client_id", dependencies.clientId);
+  authorize.searchParams.set("redirect_uri", `${baseUrl}/auth/callback`);
+  authorize.searchParams.set("scope", OAUTH_SCOPES);
+  authorize.searchParams.set("state", state);
 
-  res.statusCode = 302
+  res.statusCode = 302;
   res.setHeader(
     "Set-Cookie",
-    serializeCookie(STATE_COOKIE, state, { maxAgeSeconds: 600, secure: dependencies.secureCookies })
-  )
-  res.setHeader("Location", authorize.toString())
-  res.end()
+    serializeCookie(STATE_COOKIE, state, {
+      maxAgeSeconds: 600,
+      secure: dependencies.secureCookies,
+    }),
+  );
+  res.setHeader("Location", authorize.toString());
+  res.end();
 }
 
 async function handleCallback(
@@ -244,26 +265,35 @@ async function handleCallback(
   baseUrl: string,
   req: IncomingMessage,
   res: ServerResponse,
-  url: URL
+  url: URL,
 ) {
   if (!isOAuthConfigured(dependencies)) {
-    sendJson(res, 503, oauthUnavailablePayload())
-    return
+    sendJson(res, 503, oauthUnavailablePayload());
+    return;
   }
 
-  const limit = dependencies.rateLimiters.auth.check(`auth:${remoteAddressBucket(req, dependencies.trustProxy ?? false)}`)
+  const limit = dependencies.rateLimiters.auth.check(
+    `auth:${remoteAddressBucket(req, dependencies.trustProxy ?? false)}`,
+  );
   if (!limit.allowed) {
-    sendRateLimit(res, limit)
-    return
+    sendRateLimit(res, limit);
+    return;
   }
 
-  const code = url.searchParams.get("code")
-  const state = url.searchParams.get("state")
-  const cookies = parseCookies(req.headers.cookie)
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const cookies = parseCookies(req.headers.cookie);
 
-  if (!code || !state || !cookies[STATE_COOKIE] || cookies[STATE_COOKIE] !== state) {
-    sendJson(res, 400, { message: "OAuth state mismatch. Start again at /auth/login." })
-    return
+  if (
+    !code ||
+    !state ||
+    !cookies[STATE_COOKIE] ||
+    cookies[STATE_COOKIE] !== state
+  ) {
+    sendJson(res, 400, {
+      message: "OAuth state mismatch. Start again at /auth/login.",
+    });
+    return;
   }
 
   try {
@@ -272,23 +302,37 @@ async function handleCallback(
       clientSecret: dependencies.clientSecret,
       code,
       redirectUri: `${baseUrl}/auth/callback`,
-    })
-    const login = await dependencies.fetchViewerLogin(token)
-    const session: Session = { id: getRandomBytes(16).toString("hex"), token, login, issuedAt: Date.now() }
+    });
+    const login = await dependencies.fetchViewerLogin(token);
+    const session: Session = {
+      id: getRandomBytes(16).toString("hex"),
+      token,
+      login,
+      issuedAt: Date.now(),
+    };
 
-    res.statusCode = 302
+    res.statusCode = 302;
     res.setHeader("Set-Cookie", [
-      serializeCookie(SESSION_COOKIE, sealSession(session, dependencies.sessionKey), {
-        maxAgeSeconds: SESSION_COOKIE_MAX_AGE,
+      serializeCookie(
+        SESSION_COOKIE,
+        sealSession(session, dependencies.sessionKey),
+        {
+          maxAgeSeconds: SESSION_COOKIE_MAX_AGE,
+          secure: dependencies.secureCookies,
+        },
+      ),
+      serializeCookie(STATE_COOKIE, "", {
+        maxAgeSeconds: 0,
         secure: dependencies.secureCookies,
       }),
-      serializeCookie(STATE_COOKIE, "", { maxAgeSeconds: 0, secure: dependencies.secureCookies }),
-    ])
-    res.setHeader("Location", "/dashboard")
-    res.end()
+    ]);
+    res.setHeader("Location", "/dashboard");
+    res.end();
   } catch (error) {
-    dependencies.logger.error("OAuth callback failed:", error)
-    sendJson(res, 502, { message: "GitHub sign-in failed. Try again at /auth/login." })
+    dependencies.logger.error("OAuth callback failed:", error);
+    sendJson(res, 502, {
+      message: "GitHub sign-in failed. Try again at /auth/login.",
+    });
   }
 }
 
@@ -296,169 +340,214 @@ async function handlePullRequestDetail(
   dependencies: HostedServerDependencies,
   req: IncomingMessage,
   res: ServerResponse,
-  url: URL
+  url: URL,
 ) {
   if (!isOAuthConfigured(dependencies)) {
-    res.setHeader("x-gcc-auth", "oauth")
-    sendJson(res, 503, oauthUnavailablePayload())
-    return
+    res.setHeader("x-gcc-auth", "oauth");
+    sendJson(res, 503, oauthUnavailablePayload());
+    return;
   }
 
-  const cookies = parseCookies(req.headers.cookie)
-  const session = cookies[SESSION_COOKIE] ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey) : null
+  const cookies = parseCookies(req.headers.cookie);
+  const session = cookies[SESSION_COOKIE]
+    ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey)
+    : null;
 
   if (!session) {
-    res.setHeader("x-gcc-auth", "oauth")
-    sendJson(res, 401, { message: "Sign in with GitHub to view PR details.", loginUrl: "/auth/login" })
-    return
+    res.setHeader("x-gcc-auth", "oauth");
+    sendJson(res, 401, {
+      message: "Sign in with GitHub to view PR details.",
+      loginUrl: "/auth/login",
+    });
+    return;
   }
 
   if (isSessionIdRevoked(session.id)) {
-    sendExpiredSession(dependencies, res)
-    return
+    sendExpiredSession(dependencies, res);
+    return;
   }
 
   // Rate limit PR detail requests
-  const limit = dependencies.rateLimiters.fullDashboard.check(`pr-detail:${session.login}`)
+  const limit = dependencies.rateLimiters.fullDashboard.check(
+    `pr-detail:${session.login}`,
+  );
   if (!limit.allowed) {
-    sendRateLimit(res, limit, { authHeader: "oauth" })
-    return
+    sendRateLimit(res, limit, { authHeader: "oauth" });
+    return;
   }
 
   // Parse path: /api/pr-detail/:owner/:repo/:number
-  const pathParts = url.pathname.split("/").filter(Boolean)
-  if (pathParts.length !== 5 || pathParts[0] !== "api" || pathParts[1] !== "pr-detail") {
-    sendJson(res, 400, { message: "Invalid PR detail path. Expected /api/pr-detail/:owner/:repo/:number" })
-    return
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  if (
+    pathParts.length !== 5 ||
+    pathParts[0] !== "api" ||
+    pathParts[1] !== "pr-detail"
+  ) {
+    sendJson(res, 400, {
+      message:
+        "Invalid PR detail path. Expected /api/pr-detail/:owner/:repo/:number",
+    });
+    return;
   }
 
-  const owner = pathParts[2]
-  const repo = pathParts[3]
-  const pullNumber = Number(pathParts[4])
+  const owner = pathParts[2];
+  const repo = pathParts[3];
+  const pullNumber = Number(pathParts[4]);
 
   if (!owner || !repo || !Number.isFinite(pullNumber)) {
-    sendJson(res, 400, { message: "Missing required path parameters: owner, repo, pullNumber" })
-    return
+    sendJson(res, 400, {
+      message: "Missing required path parameters: owner, repo, pullNumber",
+    });
+    return;
   }
 
   try {
-    const { fetchPullRequestDetail } = await import("./github-client.ts")
+    const { fetchPullRequestDetail } = await import("./github-client.ts");
     const detail = await fetchPullRequestDetail({
       token: session.token,
       owner,
       repo,
       pullNumber,
-    })
-    res.setHeader("x-gcc-auth", "oauth")
-    sendJson(res, 200, detail)
+    });
+    res.setHeader("x-gcc-auth", "oauth");
+    sendJson(res, 200, detail);
   } catch (error) {
-    const status = (error as { status?: number }).status
+    const status = (error as { status?: number }).status;
     if (status === 401) {
-      sendExpiredSession(dependencies, res)
-      return
+      sendExpiredSession(dependencies, res);
+      return;
     }
     if (status === 404) {
-      sendJson(res, 404, { message: "Pull request not found." })
-      return
+      sendJson(res, 404, { message: "Pull request not found." });
+      return;
     }
     if (status === 403) {
-      sendJson(res, 403, { message: "Insufficient permissions to view this pull request." })
-      return
+      sendJson(res, 403, {
+        message: "Insufficient permissions to view this pull request.",
+      });
+      return;
     }
-    dependencies.logger.error("Fetch PR detail failed:", error)
-    sendJson(res, 500, { message: "Failed to fetch PR details. Try again shortly." })
+    dependencies.logger.error("Fetch PR detail failed:", error);
+    sendJson(res, 500, {
+      message: "Failed to fetch PR details. Try again shortly.",
+    });
   }
 }
 
 async function handleLogout(
   dependencies: HostedServerDependencies,
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
 ) {
   // Logout revokes the GitHub OAuth token, so block cross-site GET navigations
   // (cookies are SameSite=Lax and still sent on top-level links).
-  const fetchSite = req.headers["sec-fetch-site"]
-  if (typeof fetchSite === "string" && fetchSite !== "same-origin" && fetchSite !== "none") {
-    sendJson(res, 403, { message: "Logout must be initiated from the dashboard." })
-    return
+  const fetchSite = req.headers["sec-fetch-site"];
+  if (
+    typeof fetchSite === "string" &&
+    fetchSite !== "same-origin" &&
+    fetchSite !== "none"
+  ) {
+    sendJson(res, 403, {
+      message: "Logout must be initiated from the dashboard.",
+    });
+    return;
   }
 
-  const cookies = parseCookies(req.headers.cookie)
-  const session = cookies[SESSION_COOKIE] ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey) : null
+  const cookies = parseCookies(req.headers.cookie);
+  const session = cookies[SESSION_COOKIE]
+    ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey)
+    : null;
 
   if (session) {
-    revokeSessionId(session.id, session.issuedAt + SESSION_COOKIE_MAX_AGE * 1000)
+    revokeSessionId(
+      session.id,
+      session.issuedAt + SESSION_COOKIE_MAX_AGE * 1000,
+    );
     if (isOAuthConfigured(dependencies)) {
       try {
         await dependencies.revokeOAuthToken({
           clientId: dependencies.clientId,
           clientSecret: dependencies.clientSecret,
           token: session.token,
-        })
+        });
       } catch (error) {
-        dependencies.logger.warn("GitHub OAuth token revocation failed:", error)
+        dependencies.logger.warn(
+          "GitHub OAuth token revocation failed:",
+          error,
+        );
       }
     }
   }
 
-  res.statusCode = 302
+  res.statusCode = 302;
   res.setHeader(
     "Set-Cookie",
-    serializeCookie(SESSION_COOKIE, "", { maxAgeSeconds: 0, secure: dependencies.secureCookies })
-  )
-  res.setHeader("Location", "/")
-  res.end()
+    serializeCookie(SESSION_COOKIE, "", {
+      maxAgeSeconds: 0,
+      secure: dependencies.secureCookies,
+    }),
+  );
+  res.setHeader("Location", "/");
+  res.end();
 }
 
 async function handleDashboard(
   dependencies: HostedServerDependencies,
   req: IncomingMessage,
   res: ServerResponse,
-  request: DashboardRequestOptions
+  request: DashboardRequestOptions,
 ) {
   if (!isOAuthConfigured(dependencies)) {
-    res.setHeader("x-gcc-auth", "oauth")
-    sendJson(res, 401, oauthUnavailablePayload())
-    return
+    res.setHeader("x-gcc-auth", "oauth");
+    sendJson(res, 401, oauthUnavailablePayload());
+    return;
   }
 
-  const cookies = parseCookies(req.headers.cookie)
-  const session = cookies[SESSION_COOKIE] ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey) : null
+  const cookies = parseCookies(req.headers.cookie);
+  const session = cookies[SESSION_COOKIE]
+    ? openSession(cookies[SESSION_COOKIE], dependencies.sessionKey)
+    : null;
 
   if (!session) {
-    res.setHeader("x-gcc-auth", "oauth")
-    sendJson(res, 401, { message: "Sign in with GitHub to load the dashboard.", loginUrl: "/auth/login" })
-    return
+    res.setHeader("x-gcc-auth", "oauth");
+    sendJson(res, 401, {
+      message: "Sign in with GitHub to load the dashboard.",
+      loginUrl: "/auth/login",
+    });
+    return;
   }
 
   if (isSessionIdRevoked(session.id)) {
-    sendExpiredSession(dependencies, res)
-    return
+    sendExpiredSession(dependencies, res);
+    return;
   }
 
   try {
-    const limit = dashboardRateLimiter(dependencies.rateLimiters, request).check(
-      `${dashboardRateLimitPrefix(request)}:${session.login}`
-    )
+    const limit = dashboardRateLimiter(
+      dependencies.rateLimiters,
+      request,
+    ).check(`${dashboardRateLimitPrefix(request)}:${session.login}`);
     if (!limit.allowed) {
-      sendRateLimit(res, limit, { authHeader: "oauth" })
-      return
+      sendRateLimit(res, limit, { authHeader: "oauth" });
+      return;
     }
 
     const payload = await dependencies.loadDashboard({
       ...request,
       auth: { token: session.token, sessionId: session.id },
-    })
-    res.setHeader("x-gcc-auth", "oauth")
-    sendJson(res, 200, payload)
+    });
+    res.setHeader("x-gcc-auth", "oauth");
+    sendJson(res, 200, payload);
   } catch (error) {
-    const status = (error as { status?: number }).status
+    const status = (error as { status?: number }).status;
     if (status === 401) {
-      sendExpiredSession(dependencies, res)
-      return
+      sendExpiredSession(dependencies, res);
+      return;
     }
-    dependencies.logger.error("Dashboard request failed:", error)
-    sendJson(res, 500, { message: "Dashboard request failed. Try again shortly." })
+    dependencies.logger.error("Dashboard request failed:", error);
+    sendJson(res, 500, {
+      message: "Dashboard request failed. Try again shortly.",
+    });
   }
 }
 
@@ -467,238 +556,287 @@ async function handlePublicDashboard(
   req: IncomingMessage,
   res: ServerResponse,
   request: DashboardRequestOptions,
-  username: string
+  username: string,
 ) {
   try {
-    const remoteAddress = remoteAddressBucket(req, dependencies.trustProxy ?? false)
-    const clientLimit = publicClientDashboardRateLimiter(dependencies.rateLimiters, request).check(
-      `${dashboardRateLimitPrefix(request)}:public-client:${remoteAddress}`
-    )
+    const remoteAddress = remoteAddressBucket(
+      req,
+      dependencies.trustProxy ?? false,
+    );
+    const clientLimit = publicClientDashboardRateLimiter(
+      dependencies.rateLimiters,
+      request,
+    ).check(
+      `${dashboardRateLimitPrefix(request)}:public-client:${remoteAddress}`,
+    );
     if (!clientLimit.allowed) {
-      sendRateLimit(res, clientLimit, { authHeader: "public" })
-      return
+      sendRateLimit(res, clientLimit, { authHeader: "public" });
+      return;
     }
 
-    const limit = dashboardRateLimiter(dependencies.rateLimiters, request).check(
-      `${dashboardRateLimitPrefix(request)}:public:${username.toLowerCase()}:${remoteAddress}`
-    )
+    const limit = dashboardRateLimiter(
+      dependencies.rateLimiters,
+      request,
+    ).check(
+      `${dashboardRateLimitPrefix(request)}:public:${username.toLowerCase()}:${remoteAddress}`,
+    );
     if (!limit.allowed) {
-      sendRateLimit(res, limit, { authHeader: "public" })
-      return
+      sendRateLimit(res, limit, { authHeader: "public" });
+      return;
     }
 
-    const payload = await dependencies.loadPublicDashboard(username, request)
-    res.setHeader("x-gcc-auth", "public")
-    sendJson(res, 200, payload)
+    const payload = await dependencies.loadPublicDashboard(username, request);
+    res.setHeader("x-gcc-auth", "public");
+    sendJson(res, 200, payload);
   } catch (error) {
-    res.setHeader("x-gcc-auth", "public")
+    res.setHeader("x-gcc-auth", "public");
     if (isPublicGithubRateLimitError(error)) {
-      sendJson(res, 403, publicGithubRateLimitPayload(dependencies, error))
-      return
+      sendJson(res, 403, publicGithubRateLimitPayload(dependencies, error));
+      return;
     }
 
-    const status = (error as { status?: number }).status
+    const status = (error as { status?: number }).status;
     if (status && status >= 400 && status < 500) {
-      const message = error instanceof Error ? error.message : "Public dashboard request failed."
-      sendJson(res, status, { message })
-      return
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Public dashboard request failed.";
+      sendJson(res, status, { message });
+      return;
     }
 
-    dependencies.logger.error("Public dashboard request failed:", error)
-    sendJson(res, 500, { message: "Public dashboard request failed. Try again shortly." })
+    dependencies.logger.error("Public dashboard request failed:", error);
+    sendJson(res, 500, {
+      message: "Public dashboard request failed. Try again shortly.",
+    });
   }
 }
 
 function remoteAddressBucket(req: IncomingMessage, trustProxy: boolean) {
   if (trustProxy) {
-    const forwarded = req.headers["x-forwarded-for"]
-    const header = Array.isArray(forwarded) ? forwarded[0] : forwarded
+    const forwarded = req.headers["x-forwarded-for"];
+    const header = Array.isArray(forwarded) ? forwarded[0] : forwarded;
     if (header) {
       // The last entry is the address the trusted proxy saw; earlier entries
       // are client-supplied and spoofable.
-      const hops = header.split(",").map((part) => part.trim()).filter(Boolean)
-      const clientAddress = hops[hops.length - 1]
-      if (clientAddress) return clientAddress
+      const hops = header
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const clientAddress = hops[hops.length - 1];
+      if (clientAddress) return clientAddress;
     }
   }
-  return req.socket.remoteAddress?.trim() || "unknown"
+  return req.socket.remoteAddress?.trim() || "unknown";
 }
 
 function dashboardRateLimiter(
   rateLimiters: HostedRateLimiters,
-  request: { force: boolean; quick: boolean }
+  request: { force: boolean; quick: boolean },
 ) {
-  if (request.force) return rateLimiters.refreshDashboard
-  if (request.quick) return rateLimiters.quickDashboard
-  return rateLimiters.fullDashboard
+  if (request.force) return rateLimiters.refreshDashboard;
+  if (request.quick) return rateLimiters.quickDashboard;
+  return rateLimiters.fullDashboard;
 }
 
 function publicClientDashboardRateLimiter(
   rateLimiters: HostedRateLimiters,
-  request: { force: boolean; quick: boolean }
+  request: { force: boolean; quick: boolean },
 ) {
-  if (request.force) return rateLimiters.publicClientRefreshDashboard
-  if (request.quick) return rateLimiters.publicClientQuickDashboard
-  return rateLimiters.publicClientFullDashboard
+  if (request.force) return rateLimiters.publicClientRefreshDashboard;
+  if (request.quick) return rateLimiters.publicClientQuickDashboard;
+  return rateLimiters.publicClientFullDashboard;
 }
 
 function dashboardRateLimitPrefix(request: { force: boolean; quick: boolean }) {
-  if (request.force) return "refresh"
-  if (request.quick) return "quick"
-  return "full"
+  if (request.force) return "refresh";
+  if (request.quick) return "quick";
+  return "full";
 }
 
 export function isOAuthConfigured(dependencies: HostedServerDependencies) {
-  return Boolean(dependencies.clientId && dependencies.clientSecret)
+  return Boolean(dependencies.clientId && dependencies.clientSecret);
 }
 
 export function oauthUnavailablePayload() {
   return {
-    message: "GitHub OAuth is not configured. Open /:username to view a public profile dashboard.",
-  }
+    message:
+      "GitHub OAuth is not configured. Open /:username to view a public profile dashboard.",
+  };
 }
 
 function isPublicGithubRateLimitError(error: unknown): error is GithubApiError {
-  if (isGithubRateLimitError(error)) return true
+  if (isGithubRateLimitError(error)) return true;
 
-  const status = (error as { status?: unknown }).status
-  return status === 403 && error instanceof Error && /rate limit/i.test(error.message)
+  const status = (error as { status?: unknown }).status;
+  return (
+    status === 403 &&
+    error instanceof Error &&
+    /rate limit/i.test(error.message)
+  );
 }
 
 function publicGithubRateLimitPayload(
   dependencies: HostedServerDependencies,
-  error: GithubApiError
+  error: GithubApiError,
 ): PublicGithubRateLimitPayload {
-  const oauthConfigured = isOAuthConfigured(dependencies)
+  const oauthConfigured = isOAuthConfigured(dependencies);
   const payload: PublicGithubRateLimitPayload = {
     code: "github_rate_limit",
     message: oauthConfigured
       ? "GitHub rate limit reached for public dashboards. Sign in with GitHub to use your own API quota, or try again later."
       : "GitHub rate limit reached for public dashboards. GitHub sign-in is not configured on this deployment; try again later.",
-  }
+  };
 
-  if (oauthConfigured) payload.loginUrl = "/auth/login"
-  if (typeof error.retryAfterSeconds === "number") payload.retryAfterSeconds = Math.max(1, Math.ceil(error.retryAfterSeconds))
-  if (typeof error.retryAt === "string") payload.retryAt = error.retryAt
+  if (oauthConfigured) payload.loginUrl = "/auth/login";
+  if (typeof error.retryAfterSeconds === "number")
+    payload.retryAfterSeconds = Math.max(1, Math.ceil(error.retryAfterSeconds));
+  if (typeof error.retryAt === "string") payload.retryAt = error.retryAt;
 
-  return payload
+  return payload;
 }
 
 function pruneExpiredRevocations() {
-  const now = Date.now()
+  const now = Date.now();
   for (const [id, expiresAt] of revokedSessionIds) {
-    if (expiresAt <= now) revokedSessionIds.delete(id)
+    if (expiresAt <= now) revokedSessionIds.delete(id);
   }
 }
 
-export function sendExpiredSession(dependencies: HostedServerDependencies, res: ServerResponse) {
+export function sendExpiredSession(
+  dependencies: HostedServerDependencies,
+  res: ServerResponse,
+) {
   res.setHeader(
     "Set-Cookie",
-    serializeCookie(SESSION_COOKIE, "", { maxAgeSeconds: 0, secure: dependencies.secureCookies })
-  )
-  res.setHeader("x-gcc-auth", "oauth")
+    serializeCookie(SESSION_COOKIE, "", {
+      maxAgeSeconds: 0,
+      secure: dependencies.secureCookies,
+    }),
+  );
+  res.setHeader("x-gcc-auth", "oauth");
   sendJson(
     res,
     401,
     isOAuthConfigured(dependencies)
-      ? { message: "GitHub session expired. Sign in again.", loginUrl: "/auth/login" }
-      : oauthUnavailablePayload()
-  )
+      ? {
+          message: "GitHub session expired. Sign in again.",
+          loginUrl: "/auth/login",
+        }
+      : oauthUnavailablePayload(),
+  );
 }
 
 async function serveStatic(
   dependencies: HostedServerDependencies,
   res: ServerResponse,
   pathname: string,
-  headOnly: boolean
+  headOnly: boolean,
 ) {
-  const staticRoot = normalizeStaticRoot(dependencies.distDir)
-  const requested = pathname === "/" ? "/index.html" : pathname
-  const safePath = normalize(requested).replace(/^(\.\.[/\\])+/, "")
-  let filePath = join(staticRoot, safePath)
-  let finalPathVerified = false
+  const staticRoot = normalizeStaticRoot(dependencies.distDir);
+  const requested = pathname === "/" ? "/index.html" : pathname;
+  const safePath = normalize(requested).replace(/^(\.\.[/\\])+/, "");
+  let filePath = join(staticRoot, safePath);
+  let finalPathVerified = false;
   if (filePath !== staticRoot && !filePath.startsWith(staticRoot + sep)) {
-    sendJson(res, 403, { message: "Forbidden." })
-    return
+    sendJson(res, 403, { message: "Forbidden." });
+    return;
   }
 
   try {
-    const stats = await dependencies.stat(filePath)
-    if (stats.isDirectory()) filePath = join(filePath, "index.html")
-    else finalPathVerified = true
+    const stats = await dependencies.stat(filePath);
+    if (stats.isDirectory()) filePath = join(filePath, "index.html");
+    else finalPathVerified = true;
   } catch {
     // SPA fallback: unknown paths render the app shell.
-    filePath = join(staticRoot, "index.html")
+    filePath = join(staticRoot, "index.html");
   }
 
   if (headOnly) {
     if (!finalPathVerified) {
       try {
-        await dependencies.stat(filePath)
+        await dependencies.stat(filePath);
       } catch {
-        sendJson(res, 404, { message: "Not found. Run `npm run build` before starting the server." })
-        return
+        sendJson(res, 404, {
+          message: "Not found. Run `npm run build` before starting the server.",
+        });
+        return;
       }
     }
-    res.statusCode = 200
-    applyStaticRepresentationHeaders(res, filePath)
-    res.end()
-    return
+    res.statusCode = 200;
+    applyStaticRepresentationHeaders(res, filePath);
+    res.end();
+    return;
   }
 
   try {
-    const body = await dependencies.readFile(filePath)
-    res.statusCode = 200
-    applyStaticRepresentationHeaders(res, filePath)
-    res.end(body)
+    const body = await dependencies.readFile(filePath);
+    res.statusCode = 200;
+    applyStaticRepresentationHeaders(res, filePath);
+    res.end(body);
   } catch {
-    sendJson(res, 404, { message: "Not found. Run `npm run build` before starting the server." })
+    sendJson(res, 404, {
+      message: "Not found. Run `npm run build` before starting the server.",
+    });
   }
 }
 
-function applyStaticRepresentationHeaders(res: ServerResponse, filePath: string) {
-  res.setHeader("Content-Type", CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream")
+function applyStaticRepresentationHeaders(
+  res: ServerResponse,
+  filePath: string,
+) {
+  res.setHeader(
+    "Content-Type",
+    CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream",
+  );
   if (filePath.includes("/assets/")) {
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable")
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   } else {
-    res.setHeader("Cache-Control", "no-cache")
+    res.setHeader("Cache-Control", "no-cache");
   }
 }
 
 function normalizeStaticRoot(distDir: string) {
-  const normalized = normalize(distDir)
-  const root = parse(normalized).root
-  let end = normalized.length
-  while (end > root.length && normalized.endsWith(sep, end)) end -= sep.length
-  return normalized.slice(0, end)
+  const normalized = normalize(distDir);
+  const root = parse(normalized).root;
+  let end = normalized.length;
+  while (end > root.length && normalized.endsWith(sep, end)) end -= sep.length;
+  return normalized.slice(0, end);
 }
 
 function applySecurityHeaders(res: ServerResponse, secureCookies: boolean) {
-  res.setHeader("X-Content-Type-Options", "nosniff")
-  res.setHeader("X-Frame-Options", "SAMEORIGIN")
-  res.setHeader("Referrer-Policy", "no-referrer")
-  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   if (secureCookies) {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains",
+    );
   }
 }
 
-export function sendJson(res: ServerResponse, status: number, payload: unknown) {
-  res.statusCode = status
-  res.setHeader("Content-Type", "application/json; charset=utf-8")
-  res.end(JSON.stringify(payload))
+export function sendJson(
+  res: ServerResponse,
+  status: number,
+  payload: unknown,
+) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
 }
 
 export function sendRateLimit(
   res: ServerResponse,
   limit: Extract<RateLimitResult, { allowed: false }>,
-  options: { authHeader?: AuthHeader } = {}
+  options: { authHeader?: AuthHeader } = {},
 ) {
-  if (options.authHeader) res.setHeader("x-gcc-auth", options.authHeader)
-  res.setHeader("Retry-After", String(limit.retryAfterSeconds))
+  if (options.authHeader) res.setHeader("x-gcc-auth", options.authHeader);
+  res.setHeader("Retry-After", String(limit.retryAfterSeconds));
   sendJson(res, 429, {
     code: "app_rate_limit",
     message: RATE_LIMIT_MESSAGE,
     retryAfterSeconds: limit.retryAfterSeconds,
-  })
+  });
 }
