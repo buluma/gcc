@@ -95,7 +95,7 @@ export function PRDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh]" style={{ maxWidth: "90vw" }}>
+      <DialogContent className="max-h-[90vh]" style={{ maxWidth: "70vw" }}>
         <DialogHeader>
           {loading ? (
             <div className="flex items-center gap-2">
