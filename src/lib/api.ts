@@ -61,6 +61,10 @@ export interface PullRequestDetailResponse {
   isMergeable: boolean
   draft: boolean
   mergeableState: string | null
+  files: Array<{ path: string; additions: number; deletions: number }>
+  filesTruncated: boolean
+  reviewRequestedLogins: string[]
+  reviewRequestedTeams: string[]
 }
 
 export async function fetchPullRequestDetail(

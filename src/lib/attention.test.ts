@@ -114,24 +114,121 @@ describe("computeNeedsAttention", () => {
     );
 
     expect(items).toEqual([
-      expect.objectContaining({ kind: "failing-ci", severity: "critical", repo: "me/app" }),
+      expect.objectContaining({ kind: "failing-ci", severity: "medium", repo: "me/app" }),
     ]);
   });
 
-  it("flags open PRs from someone else as review-requested regardless of age", () => {
-    const items = computeNeedsAttention(
-      {
-        pullRequests: [makePr({ author: "someone-else", updatedAt: "2026-08-24T11:59:00Z" })],
-        issues: [],
-        ciRuns: [],
-        viewerLogin: "me",
-      },
-      NOW,
-    );
+  describe("review-request accuracy", () => {
+    it("flags a PR only when the server confirms the viewer was explicitly requested", () => {
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [
+            makePr({ author: "someone-else", updatedAt: "2026-08-24T11:59:00Z", reviewRequested: true }),
+          ],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
 
-    expect(items).toEqual([
-      expect.objectContaining({ kind: "review-requested", detail: "Opened by someone-else" }),
-    ]);
+      expect(items).toEqual([
+        expect.objectContaining({ kind: "review-requested", detail: "Opened by someone-else" }),
+      ]);
+    });
+
+    it("does NOT flag a PR authored by someone else when the viewer was not requested", () => {
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [
+            makePr({ author: "someone-else", updatedAt: "2026-08-24T11:59:00Z", reviewRequested: false }),
+          ],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
+
+      expect(items).toEqual([]);
+    });
+
+    it("does NOT flag a PR when reviewRequested is undefined (public/unauthenticated dashboards)", () => {
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [makePr({ author: "someone-else", reviewRequested: undefined })],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
+
+      expect(items).toEqual([]);
+    });
+
+    it("flags a team-requested review the same way as a direct request (server resolves team membership)", () => {
+      // review-requested:@me on the server side already includes requests
+      // routed through a team the viewer belongs to, so from this function's
+      // perspective a team request looks identical to a direct one: true.
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [makePr({ author: "someone-else", reviewRequested: true })],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
+
+      expect(items).toEqual([
+        expect.objectContaining({ kind: "review-requested" }),
+      ]);
+    });
+
+    it("treats a PR authored by the viewer as stale-PR territory, never review-requested", () => {
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [
+            makePr({ author: "me", reviewRequested: true, updatedAt: "2026-08-20T12:00:00Z" }),
+          ],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
+
+      expect(items).toEqual([expect.objectContaining({ kind: "stale-pr" })]);
+    });
+
+    it("ignores closed PRs even when reviewRequested is true", () => {
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [makePr({ author: "someone-else", state: "closed", reviewRequested: true })],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
+
+      expect(items).toEqual([]);
+    });
+
+    it("ignores draft PRs even when reviewRequested is true", () => {
+      const items = computeNeedsAttention(
+        {
+          pullRequests: [makePr({ author: "someone-else", isDraft: true, reviewRequested: true })],
+          issues: [],
+          ciRuns: [],
+          viewerLogin: "me",
+        },
+        NOW,
+      );
+
+      expect(items).toEqual([]);
+    });
   });
 
   it("flags the viewer's own PRs as stale only after 3 days of inactivity", () => {
@@ -156,21 +253,8 @@ describe("computeNeedsAttention", () => {
       NOW,
     );
     expect(stale).toEqual([
-      expect.objectContaining({ kind: "stale-pr", severity: "warning" }),
+      expect.objectContaining({ kind: "stale-pr", severity: "low" }),
     ]);
-  });
-
-  it("ignores draft PRs entirely", () => {
-    const items = computeNeedsAttention(
-      {
-        pullRequests: [makePr({ author: "someone-else", isDraft: true })],
-        issues: [],
-        ciRuns: [],
-        viewerLogin: "me",
-      },
-      NOW,
-    );
-    expect(items).toEqual([]);
   });
 
   it("flags open issues quiet for more than 14 days, but not pull requests in the issue list", () => {
@@ -191,12 +275,12 @@ describe("computeNeedsAttention", () => {
     ]);
   });
 
-  it("sorts critical before warning before info, then most recent first", () => {
+  it("sorts by attention score descending, then most recent first", () => {
     const items = computeNeedsAttention(
       {
         pullRequests: [
           makePr({ id: 10, author: "me", updatedAt: "2026-08-19T00:00:00Z" }),
-          makePr({ id: 11, author: "someone-else", updatedAt: "2026-08-23T00:00:00Z" }),
+          makePr({ id: 11, author: "someone-else", updatedAt: "2026-08-23T00:00:00Z", reviewRequested: true }),
         ],
         issues: [makeIssue({ id: 20, updatedAt: "2026-08-01T00:00:00Z" })],
         ciRuns: [makeRun({ conclusion: "failure" })],
@@ -205,12 +289,32 @@ describe("computeNeedsAttention", () => {
       NOW,
     );
 
+    // review-requested (CI failing + review requested = 75) outranks
+    // stale-pr (CI failing + 2 days overdue = 57), which outranks the bare
+    // failing-ci item (45 + recent-activity bump = 50), which outranks the
+    // long-stale issue with no other signals (19).
     expect(items.map((item) => item.kind)).toEqual([
-      "failing-ci",
       "review-requested",
       "stale-pr",
+      "failing-ci",
       "stale-issue",
     ]);
+    expect(items).toEqual([...items].sort((a, b) => b.score - a.score));
+  });
+
+  it("attaches a deterministic score and reasons to every item", () => {
+    const items = computeNeedsAttention(
+      {
+        pullRequests: [],
+        issues: [],
+        ciRuns: [makeRun({ conclusion: "failure" })],
+        viewerLogin: "me",
+      },
+      NOW,
+    );
+
+    expect(items[0].score).toBeGreaterThan(0);
+    expect(items[0].reasons).toContain("CI failing");
   });
 });
 
@@ -250,14 +354,16 @@ describe("computeRepoHealthByName", () => {
     expect(health.get("me/app")).toBe("critical");
   });
 
-  it("promotes a healthy repo to attention when it has a warning-severity attention item", () => {
+  it("promotes a healthy repo to attention when it has a medium-severity attention item", () => {
     const health = computeRepoHealthByName(
       [makeRepo({ fullName: "me/app" })],
       [
         {
           id: "x",
           kind: "stale-pr",
-          severity: "warning",
+          severity: "medium",
+          score: 50,
+          reasons: [],
           repo: "me/app",
           title: "t",
           url: "u",
@@ -276,7 +382,9 @@ describe("computeRepoHealthByName", () => {
         {
           id: "x",
           kind: "stale-pr",
-          severity: "warning",
+          severity: "medium",
+          score: 50,
+          reasons: [],
           repo: "me/app",
           title: "t",
           url: "u",

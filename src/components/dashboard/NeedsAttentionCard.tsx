@@ -22,9 +22,15 @@ const KIND_ICON: Record<AttentionKind, typeof GitPullRequestIcon> = {
 };
 
 const SEVERITY_ICON_CLASS: Record<AttentionSeverity, string> = {
-  critical: "text-status-error",
-  warning: "text-status-warning",
-  info: "text-muted-foreground",
+  high: "text-status-error",
+  medium: "text-status-warning",
+  low: "text-muted-foreground",
+};
+
+const SEVERITY_BADGE_VARIANT: Record<AttentionSeverity, "destructive" | "outline"> = {
+  high: "destructive",
+  medium: "outline",
+  low: "outline",
 };
 
 const COLLAPSED_LIMIT = 4;
@@ -41,7 +47,7 @@ export function NeedsAttentionCard({
   const [expanded, setExpanded] = useState(false);
   const displayed = expanded ? items : items.slice(0, COLLAPSED_LIMIT);
   const hiddenCount = items.length - displayed.length;
-  const criticalCount = items.filter((item) => item.severity === "critical").length;
+  const highCount = items.filter((item) => item.severity === "high").length;
 
   return (
     <Card
@@ -61,14 +67,14 @@ export function NeedsAttentionCard({
           <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
             {items.length}
           </span>
-          {criticalCount > 0 ? (
+          {highCount > 0 ? (
             <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
-              {criticalCount} critical
+              {highCount} critical
             </Badge>
           ) : null}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex min-h-0 max-h-48 flex-col gap-0.5 overflow-y-auto px-2 py-1.5 text-xs [scrollbar-gutter:stable]">
+      <CardContent className="flex min-h-0 max-h-56 flex-col gap-0.5 overflow-y-auto px-2 py-1.5 text-xs [scrollbar-gutter:stable]">
         {items.length === 0 ? (
           <div className="rounded-md bg-muted/30 px-2 py-3 text-muted-foreground">
             Nothing needs attention right now.
@@ -90,6 +96,7 @@ export function NeedsAttentionCard({
                       window.open(item.url, "_blank", "noopener,noreferrer");
                     }
                   }}
+                  title={item.reasons.join(", ")}
                   className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   <Icon
@@ -107,7 +114,26 @@ export function NeedsAttentionCard({
                       {shortRepoName(item.repo, viewerLogin)} · {item.detail} ·{" "}
                       {formatRelative(item.updatedAt)}
                     </span>
+                    {item.reasons.length > 0 ? (
+                      <span className="mt-0.5 flex flex-wrap gap-1">
+                        {item.reasons.map((reason) => (
+                          <span
+                            key={reason}
+                            className="rounded-sm bg-muted px-1 py-px text-[10px] leading-4 text-muted-foreground"
+                          >
+                            {reason}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
+                  <Badge
+                    variant={SEVERITY_BADGE_VARIANT[item.severity]}
+                    className="h-4 shrink-0 self-start px-1.5 font-mono text-[10px] tabular-nums"
+                    title={`Attention score ${item.score}/100`}
+                  >
+                    {item.score}
+                  </Badge>
                 </button>
               );
             })}

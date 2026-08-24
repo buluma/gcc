@@ -530,6 +530,7 @@ export default function DashboardPage({
                 const repoHealth = computeRepoHealthByName(
                   view.visibleRepos,
                   attentionItems,
+                  view.visibleRuns,
                 );
                 const activityEvents = computeActivityStream({
                   commits: view.visibleActivity.commits,

@@ -26,6 +26,8 @@ type GithubExecutorOptions = {
   latestPullRequestFailures?: unknown[];
   workflowRunsByRepo?: Record<string, unknown[]>;
   workflowRunFailuresByRepo?: Record<string, unknown>;
+  reviewRequestedIds?: number[];
+  pullRequestSearchItems?: unknown[];
 };
 
 function createGithubExecutor({
@@ -39,6 +41,8 @@ function createGithubExecutor({
   latestPullRequestFailures = [],
   workflowRunsByRepo = {},
   workflowRunFailuresByRepo = {},
+  reviewRequestedIds,
+  pullRequestSearchItems,
 }: GithubExecutorOptions = {}) {
   const calls: GhCall[] = [];
   let graphqlPage = 0;
@@ -136,6 +140,14 @@ function createGithubExecutor({
     }
 
     if (endpoint.startsWith("/search/issues?")) {
+      if (endpoint.includes("review-requested%3A%40me")) {
+        return JSON.stringify({
+          items: (reviewRequestedIds ?? []).map((id) => ({ id })),
+        });
+      }
+      if (endpoint.includes("is%3Apr") && pullRequestSearchItems) {
+        return JSON.stringify({ items: pullRequestSearchItems });
+      }
       return JSON.stringify({ items: [] });
     }
 
@@ -215,6 +227,22 @@ function createRawPullRequest() {
     updated_at: "2026-06-10T13:00:00Z",
     created_at: "2026-06-10T11:00:00Z",
     user: { login: "jskoiz" },
+  };
+}
+
+function createRawSearchIssue(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    number: 1,
+    title: "Search result pull request",
+    state: "open",
+    html_url: "https://github.com/jskoiz/active-repo/pull/1",
+    repository_url: "https://api.github.com/repos/jskoiz/active-repo",
+    updated_at: "2026-06-10T13:00:00Z",
+    created_at: "2026-06-10T11:00:00Z",
+    user: { login: "someone-else" },
+    pull_request: {},
+    ...overrides,
   };
 }
 
@@ -309,6 +337,61 @@ function restoreEnv(
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
 }
+
+describe("getGithubDashboard review-requested detection", () => {
+  it("marks only pull requests returned by the review-requested:@me search as reviewRequested", async () => {
+    const { executor } = createGithubExecutor({
+      pullRequestSearchItems: [
+        createRawSearchIssue({ id: 1, number: 1 }),
+        createRawSearchIssue({ id: 2, number: 2 }),
+      ],
+      reviewRequestedIds: [2],
+    });
+    configureGithubDashboardForTests(executor);
+
+    const payload = await getGithubDashboard({ force: true, scanLimit: 8 });
+
+    expect(
+      payload.pullRequests.find((pr) => pr.id === 1)?.reviewRequested,
+    ).toBe(false);
+    expect(
+      payload.pullRequests.find((pr) => pr.id === 2)?.reviewRequested,
+    ).toBe(true);
+  });
+
+  it("leaves reviewRequested unset for public profile dashboards (no authenticated viewer)", async () => {
+    process.env.GITHUB_PUBLIC_TOKEN = "";
+    const fetchMock = vi.fn(
+      async (...[input]: [string | URL | Request, RequestInit?]) => {
+        const url = input.toString();
+        if (url.endsWith("/users/jskoiz")) {
+          return jsonResponse({
+            login: "jskoiz",
+            name: "saburo",
+            avatar_url: "https://example.com/avatar.png",
+            html_url: "https://github.com/jskoiz",
+          });
+        }
+        if (url.includes("/users/jskoiz/repos?")) {
+          return jsonResponse([createRawRepo()]);
+        }
+        if (url.includes("/search/issues?")) {
+          return jsonResponse({
+            items: [createRawSearchIssue({ id: 1, number: 1 })],
+          });
+        }
+        throw new Error(`Unhandled fetch ${url}`);
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await getPublicGithubDashboard("jskoiz", { scanLimit: 8 });
+
+    expect(
+      payload.pullRequests.find((pr) => pr.id === 1)?.reviewRequested,
+    ).toBeUndefined();
+  });
+});
 
 describe("getGithubDashboard request coalescing", () => {
   it("shares simultaneous identical full loads", async () => {

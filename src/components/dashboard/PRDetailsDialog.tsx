@@ -12,6 +12,7 @@ import {
   FileTextIcon,
   ExternalLinkIcon,
   ShieldCheckIcon,
+  SparklesIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchPullRequestDetail } from "@/lib/api";
 import { formatRelative, shortRepoName } from "@/lib/format";
-import { computeEngineeringSummary, type RiskLevel } from "@/lib/pr-risk";
+import { computePrIntelligence } from "@/lib/pr-intelligence";
+import type { AttentionScoreSeverity } from "@/lib/attention-score";
+import type { ChangeRisk } from "@/lib/change-intelligence";
 import { cn } from "@/lib/utils";
 import type { PullRequestDetailResponse } from "@/lib/api";
 
@@ -144,9 +147,8 @@ export function PRDetailsDialog({
 
         {detail && !loading && !error && (
           <>
-            <EngineeringSummaryPanel detail={detail} />
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="checks">Checks</TabsTrigger>
                 <TabsTrigger value="files">
@@ -155,6 +157,7 @@ export function PRDetailsDialog({
                 <TabsTrigger value="commits">
                   Commits ({detail.commits})
                 </TabsTrigger>
+                <TabsTrigger value="intelligence">Intelligence</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4 space-y-4">
@@ -321,13 +324,34 @@ export function PRDetailsDialog({
               </TabsContent>
 
               <TabsContent value="files" className="mt-4">
-                <div className="rounded-md border p-4 text-center text-muted-foreground">
-                  <FileTextIcon className="size-12 mx-auto mb-2 opacity-50" />
-                  <p>File list and diffs require additional API calls.</p>
-                  <p className="text-sm mt-1">
-                    Would show changed files with additions/deletions per file.
-                  </p>
-                </div>
+                {detail.files.length === 0 ? (
+                  <div className="rounded-md border p-4 text-center text-muted-foreground">
+                    <FileTextIcon className="size-12 mx-auto mb-2 opacity-50" />
+                    <p>No file changes reported.</p>
+                  </div>
+                ) : (
+                  <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {detail.files.map((file) => (
+                      <div
+                        key={file.path}
+                        className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+                      >
+                        <span className="min-w-0 truncate font-mono text-xs">
+                          {file.path}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2 font-mono text-xs">
+                          <span className="text-status-success">+{file.additions}</span>
+                          <span className="text-status-error">-{file.deletions}</span>
+                        </span>
+                      </div>
+                    ))}
+                    {detail.filesTruncated ? (
+                      <p className="px-2 pt-1 text-xs text-muted-foreground">
+                        GitHub truncated this list; not every changed file is shown.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="commits" className="mt-4">
@@ -338,6 +362,10 @@ export function PRDetailsDialog({
                     Would show {detail.commits} commits in this PR.
                   </p>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="intelligence" className="mt-4">
+                <IntelligenceTab detail={detail} viewerLogin={viewerLogin} />
               </TabsContent>
             </Tabs>
           </>
@@ -391,70 +419,152 @@ export function PRDetailsDialog({
   );
 }
 
-const RISK_BORDER_CLASS: Record<RiskLevel, string> = {
+const SEVERITY_BORDER_CLASS: Record<AttentionScoreSeverity, string> = {
   low: "border-status-success/25 bg-status-success/5",
   medium: "border-status-warning/25 bg-status-warning/5",
   high: "border-destructive/25 bg-destructive/5",
 };
 
-const RISK_BADGE_VARIANT: Record<RiskLevel, "outline" | "destructive"> = {
+const SEVERITY_BADGE_VARIANT: Record<AttentionScoreSeverity, "outline" | "destructive"> = {
   low: "outline",
   medium: "outline",
   high: "destructive",
 };
 
-function EngineeringSummaryPanel({
+const RISK_BADGE_VARIANT: Record<ChangeRisk, "outline" | "destructive"> = {
+  low: "outline",
+  medium: "outline",
+  high: "destructive",
+};
+
+/**
+ * Deterministic PR intelligence: attention score, structural change risk,
+ * CI/review state, and a rule-based recommendation. Everything here is
+ * computed from data already on `detail` — no additional requests, no AI.
+ */
+function IntelligenceTab({
   detail,
+  viewerLogin,
 }: {
   detail: PullRequestDetailResponse;
+  viewerLogin: string;
 }) {
-  const summary = useMemo(() => computeEngineeringSummary(detail), [detail]);
+  const intelligence = useMemo(
+    () => computePrIntelligence(detail, viewerLogin),
+    [detail, viewerLogin],
+  );
+  const { attention, changeProfile, reviewRequestedForViewer, recommendation } =
+    intelligence;
 
   return (
-    <div
-      className={cn(
-        "mt-4 rounded-md border p-3",
-        RISK_BORDER_CLASS[summary.level],
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <RiskLevelIcon level={summary.level} />
-          <p className="text-sm font-medium">Engineering Summary</p>
+    <div className="space-y-4">
+      <div
+        className={cn(
+          "rounded-md border p-3",
+          SEVERITY_BORDER_CLASS[attention.severity],
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <SeverityIcon severity={attention.severity} />
+            <p className="text-sm font-medium">Attention Score</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-lg tabular-nums">{attention.score}</span>
+            <Badge
+              variant={SEVERITY_BADGE_VARIANT[attention.severity]}
+              className="capitalize"
+            >
+              {attention.severity}
+            </Badge>
+          </div>
         </div>
-        <Badge
-          variant={RISK_BADGE_VARIANT[summary.level]}
-          className="capitalize"
-        >
-          {summary.level} risk
-        </Badge>
+        {attention.reasons.length > 0 ? (
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {attention.reasons.map((reason) => (
+              <li
+                key={reason}
+                className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+              >
+                {reason}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            No attention signals detected.
+          </p>
+        )}
       </div>
-      <p className="mt-1.5 text-sm text-muted-foreground">{summary.headline}</p>
-      {summary.factors.length > 0 ? (
+
+      <div className="rounded-md border p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">Structural Change Risk</p>
+          <Badge variant={RISK_BADGE_VARIANT[changeProfile.risk]} className="capitalize">
+            {changeProfile.risk} risk
+          </Badge>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-muted-foreground">Blast radius</p>
+            <p className="font-mono tabular-nums">{changeProfile.blastRadius}</p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-xs text-muted-foreground">Changed areas</p>
+            <p className="capitalize">
+              {changeProfile.areas.length > 0 ? changeProfile.areas.join(", ") : "None flagged"}
+            </p>
+          </div>
+        </div>
         <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-          {summary.factors.map((factor) => (
-            <li key={factor.label} className="flex gap-1.5">
-              <span className="font-medium text-foreground">
-                {factor.label}:
-              </span>
-              <span>{factor.detail}</span>
-            </li>
+          {changeProfile.signals.map((signal) => (
+            <li key={signal}>{signal}</li>
           ))}
         </ul>
-      ) : null}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-md border p-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            CI state
+          </p>
+          <p className="mt-1 text-sm capitalize">
+            {detail.statusCheckRollup?.toLowerCase() ?? "Unknown"}
+          </p>
+        </div>
+        <div className="rounded-md border p-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Review state
+          </p>
+          <p className="mt-1 text-sm capitalize">
+            {detail.reviewDecision?.toLowerCase().replace(/_/g, " ") ?? "Pending"}
+            {reviewRequestedForViewer ? " · requested from you" : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3">
+        <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Recommendation
+          </p>
+          <p className="mt-0.5 text-sm">{recommendation}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-function RiskLevelIcon({ level }: { level: RiskLevel }) {
-  if (level === "high")
+function SeverityIcon({ severity }: { severity: AttentionScoreSeverity }) {
+  if (severity === "high")
     return (
       <AlertTriangleIcon
         className="size-4 text-destructive"
         aria-hidden="true"
       />
     );
-  if (level === "medium")
+  if (severity === "medium")
     return (
       <AlertCircleIcon
         className="size-4 text-status-warning"

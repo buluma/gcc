@@ -18,7 +18,7 @@ describe("NeedsAttentionCard", () => {
     ).toBeTruthy();
   });
 
-  it("shows the critical badge and item count", () => {
+  it("shows the critical badge when a high-severity item is present", () => {
     render(
       <NeedsAttentionCard
         items={makeItems(1)}
@@ -26,8 +26,18 @@ describe("NeedsAttentionCard", () => {
         onOpenPRDetail={vi.fn()}
       />,
     );
-    expect(screen.getByText("1")).toBeTruthy();
     expect(screen.getByText("1 critical")).toBeTruthy();
+  });
+
+  it("shows each item's attention score", () => {
+    render(
+      <NeedsAttentionCard
+        items={makeItems(1)}
+        viewerLogin="me"
+        onOpenPRDetail={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("87")).toBeTruthy();
   });
 
   it("collapses beyond four items with an expand control", () => {
@@ -55,7 +65,9 @@ describe("NeedsAttentionCard", () => {
           {
             id: "review-requested:1",
             kind: "review-requested",
-            severity: "warning",
+            severity: "medium",
+            score: 60,
+            reasons: ["Review requested"],
             repo: "me/app",
             title: "Add feature",
             url: "https://github.com/me/app/pull/7",
@@ -78,7 +90,9 @@ function makeItems(count: number): AttentionItem[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `failing-ci:repo-${index}`,
     kind: "failing-ci" as const,
-    severity: "critical" as const,
+    severity: "high" as const,
+    score: 87,
+    reasons: ["CI failing"],
     repo: `me/repo-${index}`,
     title: `Item ${index}`,
     url: `https://github.com/me/repo-${index}`,

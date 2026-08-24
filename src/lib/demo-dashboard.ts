@@ -384,6 +384,7 @@ function createDemoPullRequests(now: number): IssueSummary[] {
       author: "maya",
       labels: ["product"],
       isPullRequest: true,
+      reviewRequested: true,
     }, 1),
     issue(now, 2, "api", {
       number: 38,
@@ -417,6 +418,7 @@ function createDemoPullRequests(now: number): IssueSummary[] {
       author: "kai",
       labels: ["deploy"],
       isPullRequest: true,
+      reviewRequested: true,
     }, 18),
     issue(now, 6, "command-center", {
       number: 19,
@@ -433,6 +435,7 @@ function createDemoPullRequests(now: number): IssueSummary[] {
       author: "nora",
       labels: ["public"],
       isPullRequest: true,
+      reviewRequested: true,
     }, 28),
     issue(now, 8, "review-inbox", {
       number: 17,

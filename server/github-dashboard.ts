@@ -424,7 +424,7 @@ async function loadGithubDashboard({
   );
   const scanRepos = enrichedRepos.slice(0, scanLimit);
 
-  const [repoDetails, runs, pullRequests, issues, billing] =
+  const [repoDetails, runs, pullRequestsRaw, issues, billing, reviewRequestedIds] =
     await promiseAllWithTimeout(
       [
         getPerRepoLatestDetails(enrichedRepos, scanRepos, warnings, now),
@@ -440,6 +440,7 @@ async function loadGithubDashboard({
           warnings,
         ),
         getBilling(viewer.login, warnings),
+        getReviewRequestedPrIds(warnings),
       ],
       DASHBOARD_TIMEOUT_MS,
     ).catch(
@@ -449,6 +450,7 @@ async function loadGithubDashboard({
         IssueSummary[],
         IssueSummary[],
         BillingSummary,
+        Set<number> | null,
       ] => {
         warnings.push({
           area: "dashboard",
@@ -464,9 +466,21 @@ async function loadGithubDashboard({
             new Date().getMonth() + 1,
             "Billing unavailable due to timeout.",
           ),
+          null,
         ] as const;
       },
     );
+  // Only mark reviewRequested when we actually queried GitHub's
+  // review-requested:@me qualifier (authenticated, non-public dashboards).
+  // GitHub resolves both direct and team-membership requests for that
+  // qualifier, so a single search call is authoritative without per-PR fanout.
+  const pullRequests =
+    reviewRequestedIds === null
+      ? pullRequestsRaw
+      : pullRequestsRaw.map((pr) => ({
+          ...pr,
+          reviewRequested: reviewRequestedIds.has(pr.id),
+        }));
   const commits = getRecentCommitsFromRepoDetails(enrichedRepos, repoDetails);
 
   // Check rate limit and warn if low
@@ -1003,6 +1017,38 @@ async function getSearchItems(
   } catch (error) {
     warnings.push(toWarning(isPullRequest ? "pull requests" : "issues", error));
     return [];
+  }
+}
+
+/**
+ * Returns the ids of open pull requests where GitHub confirms the current
+ * viewer has a pending review request, using the `review-requested:@me`
+ * search qualifier. GitHub resolves this against the PR's real
+ * `requested_reviewers` (direct) and `requested_teams` (via the viewer's
+ * team membership) server-side, so this is authoritative without fetching
+ * every candidate PR's full review-request list individually.
+ *
+ * Returns null when there is no authenticated viewer to resolve `@me`
+ * against (public profile mode) — callers must treat that as "unknown",
+ * not "no requests".
+ */
+async function getReviewRequestedPrIds(
+  warnings: DashboardWarning[],
+): Promise<Set<number> | null> {
+  if (currentPublicLogin()) return null;
+
+  try {
+    const params = new URLSearchParams({
+      q: "is:pr review-requested:@me archived:false",
+      per_page: "50",
+    });
+    const raw = await ghJson<{ items?: RawSearchIssue[] }>(
+      `/search/issues?${params.toString()}`,
+    );
+    return new Set((raw.items ?? []).map((item) => item.id));
+  } catch (error) {
+    warnings.push(toWarning("review requests", error));
+    return new Set();
   }
 }
 

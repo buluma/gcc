@@ -54,6 +54,7 @@ const IssueSummarySchema: z.ZodType<IssueSummary> = z.object({
   labels: z.array(z.string()),
   isPullRequest: z.boolean(),
   isDraft: z.boolean().optional(),
+  reviewRequested: z.boolean().optional(),
 })
 
 const WorkflowRunSummarySchema: z.ZodType<WorkflowRunSummary> = z.object({

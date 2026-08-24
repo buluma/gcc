@@ -63,6 +63,13 @@ export type IssueSummary = {
   labels: string[];
   isPullRequest: boolean;
   isDraft?: boolean;
+  /**
+   * True only when GitHub's `review-requested:@me` search qualifier confirms
+   * the current viewer (directly or via a team they belong to) has a pending
+   * review request on this pull request. Undefined for issues and for pull
+   * requests fetched in a context with no authenticated viewer (public mode).
+   */
+  reviewRequested?: boolean;
 };
 
 export type WorkflowRunSummary = {

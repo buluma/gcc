@@ -427,6 +427,10 @@ export async function fetchPullRequestDetail(options: {
   isMergeable: boolean
   draft: boolean
   mergeableState: string | null
+  files: Array<{ path: string; additions: number; deletions: number }>
+  filesTruncated: boolean
+  reviewRequestedLogins: string[]
+  reviewRequestedTeams: string[]
 }> {
   const { owner, repo, pullNumber, token } = options
   
@@ -479,6 +483,27 @@ export async function fetchPullRequestDetail(options: {
           totalCount
         }
         body
+        files(first: 100) {
+          totalCount
+          nodes {
+            path
+            additions
+            deletions
+          }
+        }
+        reviewRequests(first: 25) {
+          nodes {
+            requestedReviewer {
+              __typename
+              ... on User {
+                login
+              }
+              ... on Team {
+                name
+              }
+            }
+          }
+        }
       }
     }
   }`
@@ -525,6 +550,19 @@ export async function fetchPullRequestDetail(options: {
           changedFiles: number
           commits: { totalCount: number }
           body: string | null
+          files: {
+            totalCount: number
+            nodes: { path: string; additions: number; deletions: number }[]
+          } | null
+          reviewRequests: {
+            nodes: {
+              requestedReviewer: {
+                __typename: string
+                login?: string
+                name?: string
+              } | null
+            }[]
+          } | null
         }
       }
     }
@@ -585,5 +623,25 @@ export async function fetchPullRequestDetail(options: {
     isMergeable: pr.mergeable === "MERGEABLE",
     draft: pr.isDraft,
     mergeableState: pr.mergeable,
+    files: (pr.files?.nodes ?? []).map((file) => ({
+      path: file.path,
+      additions: file.additions,
+      deletions: file.deletions,
+    })),
+    filesTruncated: (pr.files?.totalCount ?? 0) > (pr.files?.nodes.length ?? 0),
+    reviewRequestedLogins: (pr.reviewRequests?.nodes ?? [])
+      .map((node) =>
+        node.requestedReviewer?.__typename === "User"
+          ? (node.requestedReviewer.login ?? null)
+          : null,
+      )
+      .filter((login): login is string => login !== null),
+    reviewRequestedTeams: (pr.reviewRequests?.nodes ?? [])
+      .map((node) =>
+        node.requestedReviewer?.__typename === "Team"
+          ? (node.requestedReviewer.name ?? null)
+          : null,
+      )
+      .filter((name): name is string => name !== null),
   }
 }
