@@ -75,6 +75,7 @@ function renderOperationalRail(warnings: DashboardWarning[]) {
       dismissedRunIds={new Set()}
       onDismissRun={() => {}}
       onRestoreRuns={() => {}}
+      activity={[]}
     />
   )
 }

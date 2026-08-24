@@ -1,5 +1,15 @@
 import { useState } from "react"
-import { AlertTriangleIcon, CircleDollarSignIcon, ExternalLinkIcon, ShieldAlertIcon, XIcon } from "lucide-react"
+import {
+  AlertTriangleIcon,
+  CircleDollarSignIcon,
+  ExternalLinkIcon,
+  GitCommitHorizontalIcon,
+  GitPullRequestIcon,
+  CircleDotIcon,
+  PlayIcon,
+  ShieldAlertIcon,
+  XIcon,
+} from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +24,8 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { formatBillingQuantity, formatDuration, formatMoney, formatMonth, formatNumber, formatRelative, shortRepoName } from "@/lib/format"
 import { isGithubStatusFailure } from "@/lib/github-status"
+import { computeCiHealth, type ActivityEvent, type ActivityEventKind } from "@/lib/attention"
+import { cn } from "@/lib/utils"
 import type { BillingSummary, DashboardWarning, WorkflowRunSummary } from "@/types/github"
 import { StatusBadge } from "./StatusBadge"
 
@@ -26,6 +38,7 @@ export function OperationalRail({
   dismissedRunIds,
   onDismissRun,
   onRestoreRuns,
+  activity,
 }: {
   billing: BillingSummary
   isUpdating: boolean
@@ -35,14 +48,17 @@ export function OperationalRail({
   dismissedRunIds: Set<number>
   onDismissRun: (id: number) => void
   onRestoreRuns: () => void
+  activity: ActivityEvent[]
 }) {
   const failingRuns = runs.filter((run) => isGithubStatusFailure(run.conclusion ?? run.status))
+  const ciHealth = computeCiHealth(runs)
 
   return (
     <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
       <WarningPanel warnings={warnings} />
       <CiCard
         runs={failingRuns}
+        health={ciHealth}
         isUpdating={isUpdating}
         viewerLogin={viewerLogin}
         dismissedRunIds={dismissedRunIds}
@@ -50,6 +66,7 @@ export function OperationalRail({
         onRestoreRuns={onRestoreRuns}
       />
       <BillingCard billing={billing} />
+      <ActivityStreamCard events={activity} isUpdating={isUpdating} viewerLogin={viewerLogin} />
     </aside>
   )
 }
@@ -183,6 +200,7 @@ function BillingCard({ billing }: { billing: BillingSummary }) {
 
 function CiCard({
   runs,
+  health,
   isUpdating,
   viewerLogin,
   dismissedRunIds,
@@ -190,6 +208,7 @@ function CiCard({
   onRestoreRuns,
 }: {
   runs: WorkflowRunSummary[]
+  health: ReturnType<typeof computeCiHealth>
   isUpdating: boolean
   viewerLogin: string
   dismissedRunIds: Set<number>
@@ -221,6 +240,7 @@ function CiCard({
             </Button>
           ) : null}
         </div>
+        {!isUpdating && health.total > 0 ? <CiHealthStrip health={health} /> : null}
       </CardHeader>
       <CardContent className="flex min-h-0 flex-col gap-1 overflow-y-auto px-2 py-2 [scrollbar-gutter:stable]">
         {isUpdating ? (
@@ -264,6 +284,88 @@ function CiCard({
             <ShieldAlertIcon className="size-4" aria-hidden="true" />
             {hiddenCount ? "Dismissed failures are hidden." : "Latest scanned workflows are green or unavailable."}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function CiHealthStrip({ health }: { health: ReturnType<typeof computeCiHealth> }) {
+  return (
+    <div className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+      <span className="flex items-center gap-1">
+        <span className="size-1.5 rounded-full bg-status-success" aria-hidden="true" />
+        {health.passing} passing
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+        {health.failing} failing
+      </span>
+      {health.running > 0 ? (
+        <span className="flex items-center gap-1">
+          <span className="size-1.5 rounded-full bg-status-info" aria-hidden="true" />
+          {health.running} running
+        </span>
+      ) : null}
+      {health.passRate != null ? (
+        <span className="ml-auto font-mono tabular-nums">{Math.round(health.passRate)}%</span>
+      ) : null}
+    </div>
+  )
+}
+
+const ACTIVITY_KIND_ICON: Record<ActivityEventKind, typeof GitCommitHorizontalIcon> = {
+  commit: GitCommitHorizontalIcon,
+  pull_request: GitPullRequestIcon,
+  issue: CircleDotIcon,
+  ci_run: PlayIcon,
+}
+
+function ActivityStreamCard({
+  events,
+  isUpdating,
+  viewerLogin,
+}: {
+  events: ActivityEvent[]
+  isUpdating: boolean
+  viewerLogin: string
+}) {
+  return (
+    <Card id="activity" className="min-h-0 shrink-0 gap-0 rounded-lg py-0 shadow-sm shadow-foreground/[0.02] lg:max-h-[34vh]" size="sm">
+      <CardHeader className="min-h-9 border-b px-3 py-1.5 [.border-b]:pb-1.5">
+        <CardTitle className="text-[13px] font-semibold leading-none">Activity</CardTitle>
+        <CardDescription className="text-xs">
+          {isUpdating ? "Activity updating" : "Commits, pull requests, issues, and CI, most recent first"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-2 py-1.5 text-xs [scrollbar-gutter:stable]">
+        {isUpdating && events.length === 0 ? (
+          <div className="rounded-md bg-muted/30 px-2 py-3 text-muted-foreground">Updating details...</div>
+        ) : events.length === 0 ? (
+          <div className="rounded-md bg-muted/30 px-2 py-3 text-muted-foreground">No recent activity.</div>
+        ) : (
+          events.map((event) => {
+            const Icon = ACTIVITY_KIND_ICON[event.kind]
+            return (
+              <a
+                key={event.id}
+                href={event.url}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  "grid grid-cols-[auto_1fr] items-start gap-2 rounded-md px-1.5 py-1.5 outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40",
+                )}
+              >
+                <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium leading-4">{event.title}</span>
+                  <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                    {shortRepoName(event.repo, viewerLogin)} · {event.meta} · {formatRelative(event.timestamp)}
+                  </span>
+                </span>
+              </a>
+            )
+          })
         )}
       </CardContent>
     </Card>

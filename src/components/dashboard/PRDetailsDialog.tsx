@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GitBranchIcon,
   GitCommitHorizontalIcon,
@@ -7,9 +7,11 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   AlertCircleIcon,
+  AlertTriangleIcon,
   LoaderIcon,
   FileTextIcon,
   ExternalLinkIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchPullRequestDetail } from "@/lib/api";
 import { formatRelative, shortRepoName } from "@/lib/format";
+import { computeEngineeringSummary, type RiskLevel } from "@/lib/pr-risk";
 import { cn } from "@/lib/utils";
 import type { PullRequestDetailResponse } from "@/lib/api";
 
@@ -141,6 +144,7 @@ export function PRDetailsDialog({
 
         {detail && !loading && !error && (
           <>
+            <EngineeringSummaryPanel detail={detail} />
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -384,6 +388,84 @@ export function PRDetailsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const RISK_BORDER_CLASS: Record<RiskLevel, string> = {
+  low: "border-status-success/25 bg-status-success/5",
+  medium: "border-status-warning/25 bg-status-warning/5",
+  high: "border-destructive/25 bg-destructive/5",
+};
+
+const RISK_BADGE_VARIANT: Record<RiskLevel, "outline" | "destructive"> = {
+  low: "outline",
+  medium: "outline",
+  high: "destructive",
+};
+
+function EngineeringSummaryPanel({
+  detail,
+}: {
+  detail: PullRequestDetailResponse;
+}) {
+  const summary = useMemo(() => computeEngineeringSummary(detail), [detail]);
+
+  return (
+    <div
+      className={cn(
+        "mt-4 rounded-md border p-3",
+        RISK_BORDER_CLASS[summary.level],
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <RiskLevelIcon level={summary.level} />
+          <p className="text-sm font-medium">Engineering Summary</p>
+        </div>
+        <Badge
+          variant={RISK_BADGE_VARIANT[summary.level]}
+          className="capitalize"
+        >
+          {summary.level} risk
+        </Badge>
+      </div>
+      <p className="mt-1.5 text-sm text-muted-foreground">{summary.headline}</p>
+      {summary.factors.length > 0 ? (
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {summary.factors.map((factor) => (
+            <li key={factor.label} className="flex gap-1.5">
+              <span className="font-medium text-foreground">
+                {factor.label}:
+              </span>
+              <span>{factor.detail}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function RiskLevelIcon({ level }: { level: RiskLevel }) {
+  if (level === "high")
+    return (
+      <AlertTriangleIcon
+        className="size-4 text-destructive"
+        aria-hidden="true"
+      />
+    );
+  if (level === "medium")
+    return (
+      <AlertCircleIcon
+        className="size-4 text-status-warning"
+        aria-hidden="true"
+      />
+    );
+  return (
+    <ShieldCheckIcon
+      className="size-4 text-status-success"
+      aria-hidden="true"
+    />
   );
 }
 

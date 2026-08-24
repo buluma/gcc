@@ -19,6 +19,7 @@ import {
 
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { FocusView, type RepoScope } from "@/components/dashboard/FocusView";
+import { NeedsAttentionCard } from "@/components/dashboard/NeedsAttentionCard";
 import { PRDetailsDialog } from "@/components/dashboard/PRDetailsDialog";
 import { OperationalRail } from "@/components/dashboard/OperationalRail";
 import { GitHubIcon } from "@/components/icons/GitHubIcon";
@@ -52,6 +53,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { loadDismissedRuns, saveDismissedRuns } from "@/lib/dismissed-runs";
 import { loadHiddenRepos, saveHiddenRepos } from "@/lib/hidden-repos";
+import {
+  computeActivityStream,
+  computeNeedsAttention,
+  computeRepoHealthByName,
+} from "@/lib/attention";
 import { formatRelative } from "@/lib/format";
 import { classifyGithubStatus } from "@/lib/github-status";
 import type { Theme } from "@/lib/theme";
@@ -515,37 +521,62 @@ export default function DashboardPage({
                   repoScope,
                   visibility,
                 });
+                const attentionItems = computeNeedsAttention({
+                  pullRequests: view.visibleActivity.pullRequests,
+                  issues: view.visibleActivity.issues,
+                  ciRuns: view.visibleRuns,
+                  viewerLogin: data.viewer.login,
+                });
+                const repoHealth = computeRepoHealthByName(
+                  view.visibleRepos,
+                  attentionItems,
+                );
+                const activityEvents = computeActivityStream({
+                  commits: view.visibleActivity.commits,
+                  pullRequests: view.visibleActivity.pullRequests,
+                  issues: view.visibleActivity.issues,
+                  ciRuns: view.visibleRuns,
+                });
 
                 return (
-                  <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
-                    <FocusView
-                      repos={view.filteredRepos}
-                      scope={repoScope}
-                      activeCount={view.activeCount}
-                      totalCount={view.visibleRepos.length}
-                      hiddenCount={view.hiddenRepoNames.size}
-                      commits={view.visibleActivity.commits}
-                      pullRequests={view.visibleActivity.pullRequests}
-                      issues={view.visibleActivity.issues}
-                      isUpdating={updatingDetails}
-                      selectedRepo={selectedRepo}
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <NeedsAttentionCard
+                      items={attentionItems}
                       viewerLogin={data.viewer.login}
-                      onScopeChange={handleRepoScopeChange}
-                      onSelectRepo={setSelectedRepo}
-                      onToggleRepoHidden={toggleRepoHidden}
                       onOpenPRDetail={handleOpenPRDetail}
-                      onMergeComplete={() => void loadDashboard(true)}
                     />
-                    <OperationalRail
-                      billing={data.billing}
-                      isUpdating={updatingDetails}
-                      runs={view.visibleRuns}
-                      warnings={data.warnings}
-                      viewerLogin={data.viewer.login}
-                      dismissedRunIds={dismissedRunIds}
-                      onDismissRun={dismissRun}
-                      onRestoreRuns={restoreRuns}
-                    />
+                    <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
+                      <FocusView
+                        repos={view.filteredRepos}
+                        scope={repoScope}
+                        activeCount={view.activeCount}
+                        totalCount={view.visibleRepos.length}
+                        hiddenCount={view.hiddenRepoNames.size}
+                        commits={view.visibleActivity.commits}
+                        pullRequests={view.visibleActivity.pullRequests}
+                        issues={view.visibleActivity.issues}
+                        isUpdating={updatingDetails}
+                        selectedRepo={selectedRepo}
+                        viewerLogin={data.viewer.login}
+                        repoHealth={repoHealth}
+                        onScopeChange={handleRepoScopeChange}
+                        onSelectRepo={setSelectedRepo}
+                        onToggleRepoHidden={toggleRepoHidden}
+                        onOpenPRDetail={handleOpenPRDetail}
+                        onMergeComplete={() => void loadDashboard(true)}
+                      />
+                      <OperationalRail
+                        billing={data.billing}
+                        isUpdating={updatingDetails}
+                        runs={view.visibleRuns}
+                        warnings={data.warnings}
+                        viewerLogin={data.viewer.login}
+                        dismissedRunIds={dismissedRunIds}
+                        onDismissRun={dismissRun}
+                        onRestoreRuns={restoreRuns}
+                        activity={activityEvents}
+                      />
+                    </div>
                   </div>
                 );
               }}

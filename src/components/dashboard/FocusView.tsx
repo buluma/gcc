@@ -25,6 +25,7 @@ import {
   shortRepoName,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { RepoHealthTier } from "@/lib/attention";
 import type { CommitSummary, IssueSummary, RepoSummary } from "@/types/github";
 import { StatusBadge } from "./StatusBadge";
 
@@ -62,6 +63,7 @@ export function FocusView({
   isUpdating,
   selectedRepo,
   viewerLogin,
+  repoHealth,
   onScopeChange,
   onSelectRepo,
   onToggleRepoHidden,
@@ -79,6 +81,7 @@ export function FocusView({
   isUpdating: boolean;
   selectedRepo: string | null;
   viewerLogin: string;
+  repoHealth: Map<string, RepoHealthTier>;
   onScopeChange: (scope: RepoScope) => void;
   onSelectRepo: (fullName: string | null) => void;
   onToggleRepoHidden: (id: number) => void;
@@ -115,6 +118,7 @@ export function FocusView({
         hiddenCount={hiddenCount}
         selectedRepo={selectedRepo}
         viewerLogin={viewerLogin}
+        repoHealth={repoHealth}
         onScopeChange={onScopeChange}
         onSelectRepo={onSelectRepo}
         onToggleRepoHidden={onToggleRepoHidden}
@@ -246,6 +250,7 @@ function RepoSidebar({
   hiddenCount,
   selectedRepo,
   viewerLogin,
+  repoHealth,
   onScopeChange,
   onSelectRepo,
   onToggleRepoHidden,
@@ -257,6 +262,7 @@ function RepoSidebar({
   hiddenCount: number;
   selectedRepo: string | null;
   viewerLogin: string;
+  repoHealth: Map<string, RepoHealthTier>;
   onScopeChange: (scope: RepoScope) => void;
   onSelectRepo: (fullName: string | null) => void;
   onToggleRepoHidden: (id: number) => void;
@@ -364,6 +370,13 @@ function RepoSidebar({
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {repo.owner === viewerLogin ? repo.name : repo.fullName}
                 </span>
+                {repoHealth.get(repo.fullName) === "attention" ? (
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-status-warning"
+                    title="Has stale or review-needed items"
+                    aria-hidden="true"
+                  />
+                ) : null}
                 {(repo.openPullRequests ?? 0) > 0 ? (
                   <span
                     className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums transition-opacity group-hover:opacity-0"
