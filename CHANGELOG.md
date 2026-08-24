@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- chore: migrate to bun as package manager [\#23](https://github.com/buluma/gcc/pull/23) ([buluma](https://github.com/buluma))
 - feat: persist dashboard cache to disk [\#22](https://github.com/buluma/gcc/pull/22) ([buluma](https://github.com/buluma))
 - fix: stale-cache fallback searches all session keys [\#21](https://github.com/buluma/gcc/pull/21) ([buluma](https://github.com/buluma))
 - feat: stale-cache fallback for GitHub API outages [\#20](https://github.com/buluma/gcc/pull/20) ([buluma](https://github.com/buluma))
@@ -23,6 +24,7 @@
 **Merged pull requests:**
 
 - ci: add Docker build and push workflow [\#12](https://github.com/buluma/gcc/pull/12) ([buluma](https://github.com/buluma))
+- feat: add PR merge capability [\#11](https://github.com/buluma/gcc/pull/11) ([buluma](https://github.com/buluma))
 - test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
 
 ## [v0.1.0](https://github.com/buluma/gcc/tree/v0.1.0) (2026-08-17)
@@ -31,7 +33,6 @@
 
 **Merged pull requests:**
 
-- feat: add PR merge capability [\#11](https://github.com/buluma/gcc/pull/11) ([buluma](https://github.com/buluma))
 - brands [\#9](https://github.com/buluma/gcc/pull/9) ([buluma](https://github.com/buluma))
 - Update ci.yml [\#8](https://github.com/buluma/gcc/pull/8) ([buluma](https://github.com/buluma))
 - fix ci [\#7](https://github.com/buluma/gcc/pull/7) ([buluma](https://github.com/buluma))
