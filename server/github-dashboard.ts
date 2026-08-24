@@ -95,7 +95,13 @@ function currentPublicLogin(): string | undefined {
 }
 
 function boundedMapSet<T>(map: Map<string, T>, key: string, value: T) {
-  if (!map.has(key) && map.size >= MAX_CACHED_USERS) {
+  // Map iteration order is insertion order, so deleting an existing key
+  // before re-setting it moves it to the most-recently-used end. Without
+  // this, a repeatedly-active user's entry stays pinned at its original
+  // position and can be evicted ahead of a cold, long-untouched one.
+  if (map.has(key)) {
+    map.delete(key);
+  } else if (map.size >= MAX_CACHED_USERS) {
     const oldest = map.keys().next().value;
     if (oldest !== undefined) map.delete(oldest);
   }
@@ -363,22 +369,22 @@ function getStaleCache(scanLimit: number): DashboardPayload | null {
     message: "GitHub API is temporarily unavailable. Showing cached data.",
   };
 
+  // Only fall back to the current user's own cache entries. Scanning other
+  // cache keys would leak another session's or user's dashboard data (repos,
+  // issues, billing) into this response.
+  const cacheKey = currentCacheKey();
   let best: { timestamp: number; payload: DashboardPayload } | null = null;
-  for (const entry of fullCaches.values()) {
-    if (
-      entry.payload.scanLimit === scanLimit &&
-      (!best || entry.timestamp > best.timestamp)
-    ) {
-      best = entry;
-    }
+  const fullCache = fullCaches.get(cacheKey);
+  if (fullCache && fullCache.payload.scanLimit === scanLimit) {
+    best = fullCache;
   }
-  for (const entry of quickCaches.values()) {
-    if (
-      entry.payload.scanLimit === scanLimit &&
-      (!best || entry.timestamp > best.timestamp)
-    ) {
-      best = entry;
-    }
+  const quickCache = quickCaches.get(cacheKey);
+  if (
+    quickCache &&
+    quickCache.payload.scanLimit === scanLimit &&
+    (!best || quickCache.timestamp > best.timestamp)
+  ) {
+    best = quickCache;
   }
   if (!best) return null;
   return {
