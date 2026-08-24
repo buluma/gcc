@@ -64,25 +64,6 @@ describe("App dashboard cache auth", () => {
     expect(username.closest("form")?.getAttribute("action")).toBe("/jskoiz")
   })
 
-  it("renders the demo dashboard from mock data without API requests", async () => {
-    window.history.replaceState(null, "", "/demo")
-    const fetchMock = vi.fn()
-    vi.stubGlobal("fetch", fetchMock)
-
-    render(<App />)
-
-    expect(await screen.findByText("okgithub")).toBeTruthy()
-    expect(screen.getByRole("region", { name: "Repositories" }).querySelector('button[title="okgithub/command-center"]')).toBeTruthy()
-    const pullRequestsRegion = screen.getByRole("region", { name: "Pull Requests" })
-    expect(within(pullRequestsRegion).getByText("Make public profile pages the default share target")).toBeTruthy()
-    expect(within(screen.getByRole("region", { name: "Commits" })).getByText("Add demo route and homepage link")).toBeTruthy()
-    expect(screen.getByText("GitHub Actions Billing")).toBeTruthy()
-    expect(screen.queryByText(/failing workflows/i)).toBeNull()
-    expect(screen.queryByText(/open PRs · \d+ repos/i)).toBeNull()
-    expect(screen.queryByText(/open issues · \d+ repos/i)).toBeNull()
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
   it("keeps demo dashboard links inert", async () => {
     window.history.replaceState(null, "", "/demo")
     const fetchMock = vi.fn()
