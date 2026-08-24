@@ -65,8 +65,8 @@ export function OperationalRail({
         onDismissRun={onDismissRun}
         onRestoreRuns={onRestoreRuns}
       />
-      <BillingCard billing={billing} />
       <ActivityStreamCard events={activity} isUpdating={isUpdating} viewerLogin={viewerLogin} />
+      <BillingCard billing={billing} />
     </aside>
   )
 }
