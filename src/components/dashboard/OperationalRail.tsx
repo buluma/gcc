@@ -331,7 +331,7 @@ function ActivityStreamCard({
   viewerLogin: string
 }) {
   return (
-    <Card id="activity" className="min-h-0 shrink-0 gap-0 rounded-lg py-0 shadow-sm shadow-foreground/[0.02] lg:max-h-[34vh]" size="sm">
+    <Card id="activity" role="region" aria-label="Activity" className="min-h-0 shrink-0 gap-0 rounded-lg py-0 shadow-sm shadow-foreground/[0.02] lg:max-h-[34vh]" size="sm">
       <CardHeader className="min-h-9 border-b px-3 py-1.5 [.border-b]:pb-1.5">
         <CardTitle className="text-[13px] font-semibold leading-none">Activity</CardTitle>
         <CardDescription className="text-xs">

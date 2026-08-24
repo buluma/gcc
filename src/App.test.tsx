@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -73,8 +73,9 @@ describe("App dashboard cache auth", () => {
 
     expect(await screen.findByText("okgithub")).toBeTruthy()
     expect(screen.getByRole("region", { name: "Repositories" }).querySelector('button[title="okgithub/command-center"]')).toBeTruthy()
-    expect(screen.getByText("Make public profile pages the default share target")).toBeTruthy()
-    expect(screen.getByText("Add demo route and homepage link")).toBeTruthy()
+    const pullRequestsRegion = screen.getByRole("region", { name: "Pull Requests" })
+    expect(within(pullRequestsRegion).getByText("Make public profile pages the default share target")).toBeTruthy()
+    expect(within(screen.getByRole("region", { name: "Commits" })).getByText("Add demo route and homepage link")).toBeTruthy()
     expect(screen.getByText("GitHub Actions Billing")).toBeTruthy()
     expect(screen.queryByText(/failing workflows/i)).toBeNull()
     expect(screen.queryByText(/open PRs · \d+ repos/i)).toBeNull()
@@ -90,7 +91,9 @@ describe("App dashboard cache auth", () => {
     render(<App />)
 
     // In demo mode, PR titles are buttons that open the detail dialog, not links
-    const prButton = await screen.findByRole("button", { name: /Make public profile pages the default share target/i })
+    await screen.findByText("okgithub")
+    const pullRequestsRegion = screen.getByRole("region", { name: "Pull Requests" })
+    const prButton = within(pullRequestsRegion).getByRole("button", { name: /Make public profile pages the default share target/i })
     const click = new MouseEvent("click", { bubbles: true, cancelable: true })
 
     // Clicking should not navigate (defaultPrevented would be true if preventDefault was called)
@@ -110,8 +113,9 @@ describe("App dashboard cache auth", () => {
 
     await user.click(await screen.findByRole("button", { name: "Draft" }))
 
-    expect(screen.getByText("Tighten feed header wrapping on medium screens")).toBeTruthy()
-    expect(screen.queryByText("Make public profile pages the default share target")).toBeNull()
+    const pullRequestsRegion = screen.getByRole("region", { name: "Pull Requests" })
+    expect(within(pullRequestsRegion).getByText("Tighten feed header wrapping on medium screens")).toBeTruthy()
+    expect(within(pullRequestsRegion).queryByText("Make public profile pages the default share target")).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

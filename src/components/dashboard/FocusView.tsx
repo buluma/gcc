@@ -473,6 +473,8 @@ function FeedCard({
 }) {
   return (
     <Card
+      role="region"
+      aria-label={title}
       className="min-h-0 gap-0 rounded-lg py-0 shadow-sm shadow-foreground/[0.02] max-lg:max-h-96 lg:h-full"
       size="sm"
     >
