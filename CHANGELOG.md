@@ -6,6 +6,9 @@
 
 **Merged pull requests:**
 
+- feat: persist dashboard cache to disk [\#22](https://github.com/buluma/gcc/pull/22) ([buluma](https://github.com/buluma))
+- fix: stale-cache fallback searches all session keys [\#21](https://github.com/buluma/gcc/pull/21) ([buluma](https://github.com/buluma))
+- feat: stale-cache fallback for GitHub API outages [\#20](https://github.com/buluma/gcc/pull/20) ([buluma](https://github.com/buluma))
 - refactor: improve codebase quality and UX [\#19](https://github.com/buluma/gcc/pull/19) ([buluma](https://github.com/buluma))
 - ci: only run Docker workflow on merge to master and version tags [\#18](https://github.com/buluma/gcc/pull/18) ([buluma](https://github.com/buluma))
 - fix: reduce PR detail dialog width to 70vw [\#17](https://github.com/buluma/gcc/pull/17) ([buluma](https://github.com/buluma))
