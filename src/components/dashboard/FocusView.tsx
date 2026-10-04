@@ -350,11 +350,12 @@ function RepoSidebar({
           </button>
         </div>
         {repos.map((repo) => {
-          const isSelected = repo.fullName === selectedRepo;
+          const isSelected = scope !== "hidden" && repo.fullName === selectedRepo;
           return (
             <div key={repo.id} className="group relative">
               <button
                 type="button"
+                disabled={scope === "hidden"}
                 onClick={() => onSelectRepo(isSelected ? null : repo.fullName)}
                 title={repo.fullName}
                 className={cn(

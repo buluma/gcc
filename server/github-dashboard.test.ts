@@ -21,9 +21,7 @@ type GithubExecutorOptions = {
   graphqlError?: unknown;
   graphqlPageSize?: number;
   latestCommit?: unknown;
-  latestPullRequest?: unknown;
   latestCommitFailures?: unknown[];
-  latestPullRequestFailures?: unknown[];
   workflowRunsByRepo?: Record<string, unknown[]>;
   workflowRunFailuresByRepo?: Record<string, unknown>;
   reviewRequestedIds?: number[];
@@ -36,9 +34,7 @@ function createGithubExecutor({
   graphqlError,
   graphqlPageSize,
   latestCommit = createRawCommit("Latest commit"),
-  latestPullRequest = createRawPullRequest(),
   latestCommitFailures = [],
-  latestPullRequestFailures = [],
   workflowRunsByRepo = {},
   workflowRunFailuresByRepo = {},
   reviewRequestedIds,
@@ -47,7 +43,6 @@ function createGithubExecutor({
   const calls: GhCall[] = [];
   let graphqlPage = 0;
   let latestCommitAttempt = 0;
-  let latestPullRequestAttempt = 0;
   const executor = vi.fn(async (args: string[], endpoint: string) => {
     calls.push({ args, endpoint });
     await Promise.resolve();
@@ -113,17 +108,6 @@ function createGithubExecutor({
       latestCommitAttempt += 1;
       if (failure !== undefined) throw failure;
       return JSON.stringify(latestCommit ? [latestCommit] : []);
-    }
-
-    if (
-      endpoint.endsWith(
-        "/pulls?state=all&sort=updated&direction=desc&per_page=1",
-      )
-    ) {
-      const failure = latestPullRequestFailures[latestPullRequestAttempt];
-      latestPullRequestAttempt += 1;
-      if (failure !== undefined) throw failure;
-      return JSON.stringify(latestPullRequest ? [latestPullRequest] : []);
     }
 
     const workflowRunsEndpoint = endpoint.match(
@@ -214,19 +198,6 @@ function createRawCommit(message: string) {
         date: "2026-06-10T12:00:00Z",
       },
     },
-  };
-}
-
-function createRawPullRequest() {
-  return {
-    id: 100,
-    number: 42,
-    title: "Update repo dashboard",
-    state: "open",
-    html_url: "https://github.com/buluma/active-repo/pull/42",
-    updated_at: "2026-06-10T13:00:00Z",
-    created_at: "2026-06-10T11:00:00Z",
-    user: { login: "buluma" },
   };
 }
 
@@ -479,11 +450,10 @@ describe("getGithubDashboard request coalescing", () => {
     expect(repoCall?.args).not.toContain("--slurp");
   });
 
-  it("adds latest commit and pull request details directly to each repo", async () => {
+  it("adds latest commit details directly to each repo", async () => {
     const { calls, executor } = createGithubExecutor({
       repos: [createRawRepo()],
       latestCommit: createRawCommit("Latest canonical commit"),
-      latestPullRequest: createRawPullRequest(),
     });
     configureGithubDashboardForTests(executor);
 
@@ -491,7 +461,6 @@ describe("getGithubDashboard request coalescing", () => {
     const repo = payload.repos[0];
 
     expect(repo.latestCommit?.message).toBe("Latest canonical commit");
-    expect(repo.latestPullRequest?.number).toBe(42);
     expect(payload.recentCommits.map((commit) => commit.repo)).toEqual([
       "buluma/active-repo",
     ]);
@@ -507,14 +476,13 @@ describe("getGithubDashboard request coalescing", () => {
           call.endpoint ===
           "/repos/buluma/active-repo/pulls?state=all&sort=updated&direction=desc&per_page=1",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("reuses same-day per-repo detail cache across forced full refreshes", async () => {
     const { calls, executor } = createGithubExecutor({
       repos: [createRawRepo()],
       latestCommit: createRawCommit("Cached commit"),
-      latestPullRequest: createRawPullRequest(),
     });
     configureGithubDashboardForTests(executor);
 
@@ -533,16 +501,15 @@ describe("getGithubDashboard request coalescing", () => {
           call.endpoint ===
           "/repos/buluma/active-repo/pulls?state=all&sort=updated&direction=desc&per_page=1",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 
-  it("retries a one-sided repo-detail failure while preserving the successful field", async () => {
+  it("retries a failed latest-commit fetch", async () => {
     const secretError =
       "Commit request failed with token ghp_repo_detail_secret";
     const { calls, executor } = createGithubExecutor({
       repos: [createRawRepo()],
       latestCommit: createRawCommit("Recovered commit"),
-      latestPullRequest: createRawPullRequest(),
       latestCommitFailures: [new Error(secretError)],
     });
     configureGithubDashboardForTests(executor);
@@ -554,16 +521,14 @@ describe("getGithubDashboard request coalescing", () => {
       .join("\n");
 
     expect(partial.repos[0].latestCommit).toBeNull();
-    expect(partial.repos[0].latestPullRequest?.number).toBe(42);
     expect(partial.warnings).toContainEqual({
       area: "repo details",
       message:
-        "Latest commit or pull request refresh failed for 1 repositories.",
+        "Latest commit refresh failed for 1 repositories.",
     });
     expect(warningText).not.toContain(secretError);
     expect(warningText).not.toContain("ghp_repo_detail_secret");
     expect(recovered.repos[0].latestCommit?.message).toBe("Recovered commit");
-    expect(recovered.repos[0].latestPullRequest?.number).toBe(42);
     expect(
       calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1")),
     ).toHaveLength(2);
@@ -573,52 +538,7 @@ describe("getGithubDashboard request coalescing", () => {
           "/pulls?state=all&sort=updated&direction=desc&per_page=1",
         ),
       ),
-    ).toHaveLength(2);
-  });
-
-  it("retries two-sided repo-detail failures and recovers both fields", async () => {
-    const commitSecretError =
-      "Commit request failed with token ghp_commit_secret";
-    const pullRequestSecretError =
-      "Pull request failed with token ghp_pull_secret";
-    const { calls, executor } = createGithubExecutor({
-      repos: [createRawRepo()],
-      latestCommit: createRawCommit("Recovered commit"),
-      latestPullRequest: createRawPullRequest(),
-      latestCommitFailures: [new Error(commitSecretError)],
-      latestPullRequestFailures: [new Error(pullRequestSecretError)],
-    });
-    configureGithubDashboardForTests(executor);
-
-    const failed = await getGithubDashboard({ force: true, scanLimit: 8 });
-    const recovered = await getGithubDashboard({ force: true, scanLimit: 8 });
-    const warningText = failed.warnings
-      .map((warning) => warning.message)
-      .join("\n");
-
-    expect(failed.repos[0].latestCommit).toBeNull();
-    expect(failed.repos[0].latestPullRequest).toBeNull();
-    expect(failed.warnings).toContainEqual({
-      area: "repo details",
-      message:
-        "Latest commit or pull request refresh failed for 1 repositories.",
-    });
-    expect(warningText).not.toContain(commitSecretError);
-    expect(warningText).not.toContain(pullRequestSecretError);
-    expect(warningText).not.toContain("ghp_commit_secret");
-    expect(warningText).not.toContain("ghp_pull_secret");
-    expect(recovered.repos[0].latestCommit?.message).toBe("Recovered commit");
-    expect(recovered.repos[0].latestPullRequest?.number).toBe(42);
-    expect(
-      calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1")),
-    ).toHaveLength(2);
-    expect(
-      calls.filter((call) =>
-        call.endpoint.endsWith(
-          "/pulls?state=all&sort=updated&direction=desc&per_page=1",
-        ),
-      ),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
   });
 
   it("bounds cold repo-detail fanout to the workflow scan set", async () => {
@@ -645,11 +565,11 @@ describe("getGithubDashboard request coalescing", () => {
           "/pulls?state=all&sort=updated&direction=desc&per_page=1",
         ),
       ),
-    ).toHaveLength(8);
+    ).toHaveLength(0);
     expect(detailWarnings).toContainEqual({
       area: "repo details",
       message:
-        "Latest commit and pull request refresh is limited to 8 of 10 repositories; active repositories outside the live refresh scope: 2.",
+        "Latest commit refresh is limited to 8 of 10 repositories; active repositories outside the live refresh scope: 2.",
     });
     expect(
       detailWarnings.map((warning) => warning.message).join("\n"),
@@ -665,7 +585,6 @@ describe("getGithubDashboard request coalescing", () => {
     const { calls, executor } = createGithubExecutor({
       repos,
       latestCommit: createRawCommit("Cached out-of-scope commit"),
-      latestPullRequest: createRawPullRequest(),
     });
     configureGithubDashboardForTests(executor);
 
@@ -678,7 +597,6 @@ describe("getGithubDashboard request coalescing", () => {
     expect(outOfScopeRepo?.latestCommit?.message).toBe(
       "Cached out-of-scope commit",
     );
-    expect(outOfScopeRepo?.latestPullRequest?.number).toBe(42);
     expect(
       calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1")),
     ).toHaveLength(9);
@@ -688,11 +606,11 @@ describe("getGithubDashboard request coalescing", () => {
           "/pulls?state=all&sort=updated&direction=desc&per_page=1",
         ),
       ),
-    ).toHaveLength(9);
+    ).toHaveLength(0);
     expect(payload.warnings).toContainEqual({
       area: "repo details",
       message:
-        "Latest commit and pull request refresh is limited to 8 of 9 repositories; active repositories outside the live refresh scope: 1.",
+        "Latest commit refresh is limited to 8 of 9 repositories; active repositories outside the live refresh scope: 1.",
     });
   });
 
@@ -708,7 +626,6 @@ describe("getGithubDashboard request coalescing", () => {
     const { calls, executor } = createGithubExecutor({
       repos,
       latestCommit: createRawCommit("Expired out-of-scope commit"),
-      latestPullRequest: createRawPullRequest(),
     });
     configureGithubDashboardForTests(executor);
 
@@ -726,8 +643,7 @@ describe("getGithubDashboard request coalescing", () => {
     );
 
     expect(outOfScopeRepo?.latestCommit).toBeNull();
-    expect(outOfScopeRepo?.latestPullRequest).toBeNull();
-    expect(outOfScopeDetailCalls).toHaveLength(2);
+    expect(outOfScopeDetailCalls).toHaveLength(1);
   });
 
   it("skips uncached per-repo detail pulls for inactive repos", async () => {
@@ -744,7 +660,6 @@ describe("getGithubDashboard request coalescing", () => {
     const payload = await getGithubDashboard({ force: true, scanLimit: 8 });
 
     expect(payload.repos[0].latestCommit).toBeNull();
-    expect(payload.repos[0].latestPullRequest).toBeNull();
     expect(
       calls.some((call) => call.endpoint.includes("/commits?per_page=1")),
     ).toBe(false);
@@ -1112,5 +1027,99 @@ describe("getGithubDashboard workflow run warnings", () => {
     );
     expect(ciMessages.join("\n")).not.toContain("buluma/repo-four");
     expect(ciMessages.join("\n")).not.toContain("ghp_fake_secret");
+  });
+});
+
+
+describe("dashboard request ownership and enrichment", () => {
+  it("does not let an older normal load overwrite a forced full cache", async () => {
+    const { executor } = createGithubExecutor({ repos: [createRawRepo({ name: "new", full_name: "buluma/new" })] });
+    let release!: (value: string) => void;
+    let reposRequested!: () => void;
+    const started = new Promise<void>((resolve) => { reposRequested = resolve; });
+    let first = true;
+    configureGithubDashboardForTests(async (args, endpoint) => {
+      if (endpoint.startsWith("/user/repos?") && first) {
+        first = false;
+        reposRequested();
+        return new Promise<string>((resolve) => { release = resolve; });
+      }
+      return executor(args, endpoint);
+    });
+    const old = getGithubDashboard({ scanLimit: 8 });
+    await started;
+    const fresh = await getGithubDashboard({ force: true, scanLimit: 8 });
+    release(JSON.stringify([[createRawRepo({ name: "old", full_name: "buluma/old" })]]));
+    await old;
+    const cached = await getGithubDashboard({ scanLimit: 8 });
+    expect(cached.repos.map((repo) => repo.fullName)).toEqual(fresh.repos.map((repo) => repo.fullName));
+    expect(cached.repos[0].fullName).toBe("buluma/new");
+  });
+
+  it("revalidates advanced activity, retains a failed value, and retries", async () => {
+    const raw = createRawRepo();
+    const { executor, calls } = createGithubExecutor({ repos: [raw] });
+    let message = "Original commit";
+    let fail = false;
+    configureGithubDashboardForTests(async (args, endpoint) => {
+      if (endpoint.endsWith("/commits?per_page=1")) {
+        calls.push({ args, endpoint });
+        if (fail) throw new Error("private upstream failure");
+        return JSON.stringify([createRawCommit(message)]);
+      }
+      return executor(args, endpoint);
+    });
+    await getGithubDashboard({ force: true, scanLimit: 8 });
+    await getGithubDashboard({ force: true, scanLimit: 8 });
+    expect(calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1"))).toHaveLength(1);
+    raw.pushed_at = new Date(Date.parse(raw.pushed_at as string) + 1000).toISOString();
+    fail = true;
+    const failed = await getGithubDashboard({ force: true, scanLimit: 8 });
+    expect(failed.repos[0].latestCommit?.message).toBe("Original commit");
+    expect(failed.warnings).toContainEqual({ area: "repo details", message: "Latest commit refresh failed for 1 repositories." });
+    fail = false;
+    message = "New commit";
+    const recovered = await getGithubDashboard({ force: true, scanLimit: 8 });
+    expect(recovered.repos[0].latestCommit?.message).toBe("New commit");
+    expect(calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1"))).toHaveLength(3);
+  });
+
+  it("keeps valid GraphQL nodes while warning about partial errors on a later page", async () => {
+    const { executor } = createGithubExecutor({ repos: createRawRepos(51), graphqlPageSize: 50 });
+    let page = 0;
+    configureGithubDashboardForTests(async (args, endpoint) => {
+      const output = await executor(args, endpoint);
+      if (endpoint !== "graphql") return output;
+      page++;
+      return page === 2 ? JSON.stringify({ ...JSON.parse(output), errors: [{ message: "private upstream information" }] }) : output;
+    });
+    const result = await getGithubDashboard({ force: true, scanLimit: 8 });
+    expect(result.repos).toHaveLength(51);
+    expect(result.repos.every((repo) => repo.openPullRequests === 0)).toBe(true);
+    expect(result.warnings.some((warning) => warning.area === "repo counts" && warning.message.includes("partial GraphQL"))).toBe(true);
+    expect(JSON.stringify(result.warnings)).not.toContain("private upstream information");
+  });
+
+  it("bounds a cold public quick-plus-full flow for 24 active repositories", async () => {
+    const repos = createRawRepos(24, { pushed_at: new Date().toISOString(), updated_at: new Date().toISOString(), visibility: "public", private: false });
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes("/users/buluma/repos?")) return jsonResponse(repos);
+      if (url.endsWith("/users/buluma")) return jsonResponse({ login: "buluma", avatar_url: "", html_url: "https://github.com/buluma" });
+      if (url.includes("/commits?")) return jsonResponse([createRawCommit("Public commit")]);
+      if (url.includes("/actions/runs?")) return jsonResponse({ workflow_runs: [] });
+      if (url.includes("/search/issues?")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected endpoint ${url}`);
+    });
+    configureGithubDashboardForTests(null);
+    vi.stubGlobal("fetch", fetchMock);
+    await getPublicGithubDashboard("buluma", { quick: true });
+    const quickCalls = fetchMock.mock.calls.length;
+    const full = await getPublicGithubDashboard("buluma");
+    expect(full.scanLimit).toBe(16);
+    expect(fetchMock.mock.calls.length - quickCalls).toBeLessThanOrEqual(50);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(60);
+    expect(fetchMock.mock.calls.filter(([url]) => url.toString().includes("/pulls?"))).toHaveLength(0);
+    expect(full.recentCommits).toHaveLength(16);
   });
 });

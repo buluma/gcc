@@ -169,6 +169,12 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname === "/api/capabilities") {
+    res.setHeader("Cache-Control", "no-store");
+    sendJson(res, 200, { privateDashboard: isOAuthConfigured(dependencies) ? "oauth" : null } satisfies import("../src/types/github.ts").RuntimeCapabilities);
+    return;
+  }
+
   if (url.pathname === "/auth/login")
     return handleLogin(dependencies, baseUrl, req, res);
   if (url.pathname === "/auth/callback")
@@ -655,9 +661,8 @@ function isPublicGithubRateLimitError(error: unknown): error is GithubApiError {
 
   const status = (error as { status?: unknown }).status;
   return (
-    status === 403 &&
     error instanceof Error &&
-    /rate limit/i.test(error.message)
+    (status === 429 || (status === 403 && /rate limit/i.test(error.message)))
   );
 }
 

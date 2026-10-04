@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -64,9 +65,12 @@ describe("OperationalRail", () => {
   })
 })
 
-function renderOperationalRail(warnings: DashboardWarning[]) {
+function renderOperationalRail(warnings: DashboardWarning[], overrides: Partial<ComponentProps<typeof OperationalRail>> = {}) {
   return render(
     <OperationalRail
+      detailLevel="full"
+      scannedCount={24}
+      totalCount={87}
       billing={billing}
       isUpdating={false}
       runs={[]}
@@ -76,6 +80,7 @@ function renderOperationalRail(warnings: DashboardWarning[]) {
       onDismissRun={() => {}}
       onRestoreRuns={() => {}}
       activity={[]}
+      {...overrides}
     />
   )
 }
@@ -98,3 +103,27 @@ const billing: BillingSummary = {
   skus: [],
   repositories: [],
 }
+
+
+describe("operational rail loading", () => {
+  afterEach(cleanup);
+  it("keeps known workflow failures visible while updating", () => {
+    renderOperationalRail([], { isUpdating: true, runs: [{ id: 1, repo: "buluma/gcc", name: "Known failure", event: "push", status: "completed", conclusion: "failure", branch: "master", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), runStartedAt: null, durationSeconds: null, url: "https://example.com/run" }] });
+    expect(screen.getByText("Known failure")).toBeTruthy();
+    expect(screen.getByText("Workflow details updating")).toBeTruthy();
+    expect(screen.queryByText("Pulling workflow runs in the background.")).toBeNull();
+  });
+  it.each([["quick", "billing loading"], ["full", "billing blocked"]] as const)("labels %s unavailable billing accurately", (detailLevel, label) => {
+    renderOperationalRail([], { detailLevel, billing: { ...billing, available: false, message: "Unavailable" } });
+    expect(screen.getByText(label)).toBeTruthy();
+  });
+  it.each([[24, 87, "24 of 87 repositories scanned"], [12, 12, "All 12 repositories scanned"]] as const)("reports coverage %s of %s", (scannedCount, totalCount, text) => {
+    renderOperationalRail([], { scannedCount, totalCount });
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+  it("does not imply complete coverage from a quick response", () => {
+    renderOperationalRail([], { detailLevel: "quick" });
+    expect(screen.getByText("Workflow coverage loading")).toBeTruthy();
+    expect(screen.queryByText("24 of 87 repositories scanned")).toBeNull();
+  });
+});

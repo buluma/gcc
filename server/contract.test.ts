@@ -94,7 +94,6 @@ const RepoSummarySchema: z.ZodType<RepoSummary> = z.object({
   openPullRequests: z.number().int().nullable(),
   checkState: z.string().nullable(),
   latestCommit: CommitSummarySchema.nullable(),
-  latestPullRequest: IssueSummarySchema.nullable(),
   latestRun: WorkflowRunSummarySchema.nullable(),
 })
 
@@ -229,7 +228,6 @@ function createValidRepo(overrides: Partial<RepoSummary> = {}): RepoSummary {
     openPullRequests: 3,
     checkState: "SUCCESS",
     latestCommit: createValidCommit(),
-    latestPullRequest: createValidIssue(),
     latestRun: createValidWorkflowRun(),
     ...overrides,
   }
@@ -301,7 +299,7 @@ describe("DashboardPayload contract validation", () => {
 
   it("validates payload with null optional fields", () => {
     const payload = createValidDashboardPayload({
-      repos: [createValidRepo({ latestCommit: null, latestPullRequest: null, latestRun: null, description: null, language: null, defaultBranch: null, pushedAt: null, updatedAt: null, openIssues: null, openPullRequests: null, checkState: null })],
+      repos: [createValidRepo({ latestCommit: null, latestRun: null, description: null, language: null, defaultBranch: null, pushedAt: null, updatedAt: null, openIssues: null, openPullRequests: null, checkState: null })],
     })
     const result = DashboardPayloadSchema.safeParse(payload)
     expect(result.success).toBe(true)
@@ -407,7 +405,7 @@ describe("Contract round-trip serialization", () => {
 
   it("preserves null values through round-trip", () => {
     const payload = createValidDashboardPayload({
-      repos: [createValidRepo({ latestCommit: null, latestPullRequest: null, latestRun: null })],
+      repos: [createValidRepo({ latestCommit: null, latestRun: null })],
     })
     const json = JSON.stringify(payload)
     const parsed = JSON.parse(json) as DashboardPayload
@@ -416,7 +414,6 @@ describe("Contract round-trip serialization", () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.repos[0].latestCommit).toBeNull()
-      expect(result.data.repos[0].latestPullRequest).toBeNull()
       expect(result.data.repos[0].latestRun).toBeNull()
     }
   })
@@ -486,7 +483,7 @@ describe("Type completeness - all fields validated", () => {
       "id", "name", "fullName", "owner", "description", "url", "language",
       "visibility", "isPrivate", "isFork", "isArchived", "stars", "forks",
       "sizeKb", "defaultBranch", "pushedAt", "updatedAt", "openIssues",
-      "openPullRequests", "checkState", "latestCommit", "latestPullRequest", "latestRun",
+      "openPullRequests", "checkState", "latestCommit", "latestRun",
     ]
     const shape = (RepoSummarySchema as unknown as { shape: Record<string, unknown> }).shape
     for (const field of requiredFields) {

@@ -147,12 +147,12 @@ describe("createTokenExecutor", () => {
     expect((thrown as Error).message).not.toContain(token)
   })
 
-  it("marks GitHub REST rate limit responses with retry metadata", async () => {
+  it.each([403, 429])("marks GitHub REST %s responses with retry metadata", async (status) => {
     const fetchMock = installFetchMock()
     fetchMock.mockResolvedValueOnce(jsonResponse(
       { message: "API rate limit exceeded for 203.0.113.10." },
       {
-        status: 403,
+        status,
         headers: {
           "Retry-After": "60",
           "X-RateLimit-Remaining": "0",
@@ -173,7 +173,7 @@ describe("createTokenExecutor", () => {
       code: "github_rate_limit",
       endpoint: "/users/buluma",
       retryAfterSeconds: 60,
-      status: 403,
+      status,
     })
     expect(Date.parse((thrown as { retryAt: string }).retryAt)).not.toBeNaN()
   })
@@ -364,5 +364,20 @@ describe("PR detail contract", () => {
     ]);
     expect(result.reviewRequestedLogins).toEqual(["me"]);
     expect(result.reviewRequestsTruncated).toBe(true);
+  });
+});
+
+describe("upstream recovery metadata", () => {
+  it("uses reset timing for GitHub 429 without Retry-After", async () => {
+    const reset = Math.ceil(Date.now() / 1000) + 120;
+    installFetchMock().mockResolvedValueOnce(jsonResponse({ message: "Too many requests" }, { status: 429, headers: { "X-RateLimit-Reset": String(reset) } }));
+    const executor = createPublicExecutor(null);
+    await expect(executor(["api", "/users/buluma"], "/users/buluma")).rejects.toMatchObject({ code: "github_rate_limit", status: 429, retryAfterSeconds: expect.any(Number), retryAt: expect.any(String) });
+  });
+  it("preserves GraphQL data alongside partial errors", async () => {
+    const result = { data: { viewer: { login: "buluma" } }, errors: [{ message: "Partial failure" }] };
+    installFetchMock().mockResolvedValueOnce(jsonResponse(result));
+    const executor = createTokenExecutor("gho_fixture");
+    expect(JSON.parse(await executor(["api", "graphql", "-f", "query=query { viewer { login } }"], "graphql"))).toEqual(result);
   });
 });

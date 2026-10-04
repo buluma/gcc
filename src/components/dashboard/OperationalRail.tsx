@@ -31,6 +31,9 @@ import { StatusBadge } from "./StatusBadge"
 
 export function OperationalRail({
   billing,
+  detailLevel,
+  scannedCount,
+  totalCount,
   isUpdating,
   runs,
   warnings,
@@ -41,6 +44,9 @@ export function OperationalRail({
   activity,
 }: {
   billing: BillingSummary
+  detailLevel: "quick" | "full"
+  scannedCount: number
+  totalCount: number
   isUpdating: boolean
   runs: WorkflowRunSummary[]
   warnings: DashboardWarning[]
@@ -57,6 +63,7 @@ export function OperationalRail({
     <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
       <WarningPanel warnings={warnings} />
       <CiCard
+        coverage={detailLevel === "quick" ? "Workflow coverage loading" : scannedCount === totalCount ? `All ${totalCount} repositories scanned` : `${scannedCount} of ${totalCount} repositories scanned`}
         runs={failingRuns}
         health={ciHealth}
         isUpdating={isUpdating}
@@ -66,7 +73,7 @@ export function OperationalRail({
         onRestoreRuns={onRestoreRuns}
       />
       <ActivityStreamCard events={activity} isUpdating={isUpdating} viewerLogin={viewerLogin} />
-      <BillingCard billing={billing} />
+      <BillingCard billing={billing} loading={detailLevel === "quick"} />
     </aside>
   )
 }
@@ -133,7 +140,7 @@ function billingUnitLabel(unitType: string | null): string {
   return unitType ?? "Units"
 }
 
-function BillingCard({ billing }: { billing: BillingSummary }) {
+function BillingCard({ billing, loading }: { billing: BillingSummary; loading: boolean }) {
   const coveredPercent = billing.grossAmount > 0
     ? Math.min(100, (billing.discountAmount / billing.grossAmount) * 100)
     : 0
@@ -188,9 +195,9 @@ function BillingCard({ billing }: { billing: BillingSummary }) {
           </>
         ) : (
           <div className="flex flex-col gap-3">
-            <Badge variant="outline" className="w-fit text-muted-foreground">billing blocked</Badge>
-            <p className="text-sm text-muted-foreground">{billing.message ?? "GitHub billing usage is unavailable."}</p>
-            {billing.fix ? <code className="rounded-md bg-muted px-2 py-1 font-mono text-xs">{billing.fix}</code> : null}
+            <Badge variant="outline" className="w-fit text-muted-foreground">{loading ? "billing loading" : "billing blocked"}</Badge>
+            <p className="text-sm text-muted-foreground">{loading ? "Billing loads with full dashboard details." : billing.message ?? "GitHub billing usage is unavailable."}</p>
+            {!loading && billing.fix ? <code className="rounded-md bg-muted px-2 py-1 font-mono text-xs">{billing.fix}</code> : null}
           </div>
         )}
       </CardContent>
@@ -199,6 +206,7 @@ function BillingCard({ billing }: { billing: BillingSummary }) {
 }
 
 function CiCard({
+  coverage,
   runs,
   health,
   isUpdating,
@@ -208,6 +216,7 @@ function CiCard({
   onRestoreRuns,
 }: {
   runs: WorkflowRunSummary[]
+  coverage: string
   health: ReturnType<typeof computeCiHealth>
   isUpdating: boolean
   viewerLogin: string
@@ -234,16 +243,17 @@ function CiCard({
                     : "No failing runs in scanned repos"}
             </CardDescription>
           </div>
-          {hiddenCount > 0 && !isUpdating ? (
+          {hiddenCount > 0 ? (
             <Button variant="ghost" size="xs" className="shrink-0 text-muted-foreground" onClick={onRestoreRuns}>
               Show {hiddenCount} hidden
             </Button>
           ) : null}
         </div>
-        {!isUpdating && health.total > 0 ? <CiHealthStrip health={health} /> : null}
+        <p className="text-xs text-muted-foreground">{coverage}</p>
+        {health.total > 0 ? <CiHealthStrip health={health} /> : null}
       </CardHeader>
       <CardContent className="flex min-h-0 flex-col gap-1 overflow-y-auto px-2 py-2 [scrollbar-gutter:stable]">
-        {isUpdating ? (
+        {isUpdating && health.total === 0 ? (
           <div className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-2 text-sm text-muted-foreground">
             <ShieldAlertIcon className="size-4" aria-hidden="true" />
             Pulling workflow runs in the background.

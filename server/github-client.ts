@@ -207,11 +207,11 @@ async function githubFetch(
     }
     const retryAfterSeconds = retryAfterFromHeaders(response.headers)
     const isRateLimit =
-      response.status === 403
+      response.status === 429 || (response.status === 403
       && (
         response.headers.get("x-ratelimit-remaining") === "0"
         || /rate limit/i.test(message)
-      )
+      ))
     throw createApiError(message, endpoint, response.status, isRateLimit ? {
       code: "github_rate_limit",
       retryAfterSeconds,

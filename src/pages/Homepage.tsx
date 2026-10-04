@@ -10,6 +10,7 @@ import { MoonIcon, SunIcon } from "lucide-react";
 import { GitHubIcon } from "@/components/icons/GitHubIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { RuntimeCapabilities } from "@/types/github";
 import { GITHUB_LOGIN_PATTERN } from "@/types/github";
 import type { Theme } from "@/lib/theme";
 
@@ -27,6 +28,23 @@ export function Homepage({
   theme: Theme;
   onThemeToggle: () => void;
 }) {
+  const [privateDashboard, setPrivateDashboard] = useState<RuntimeCapabilities["privateDashboard"]>(null);
+  useEffect(() => {
+    if (PUBLIC_DEPLOYMENT) return;
+    const controller = new AbortController();
+    async function loadCapabilities() {
+      try {
+        const response = await fetch("/api/capabilities", { signal: controller.signal });
+        if (!response.ok) return;
+        const capabilities = await response.json() as RuntimeCapabilities;
+        if (!controller.signal.aborted && (capabilities.privateDashboard === "local" || capabilities.privateDashboard === "oauth")) setPrivateDashboard(capabilities.privateDashboard);
+      } catch {
+        // Public browsing remains available if capabilities cannot be loaded.
+      }
+    }
+    void loadCapabilities();
+    return () => controller.abort();
+  }, []);
   const [username, setUsername] = useState("");
   const normalizedUsername = username.trim();
   const publicPath = GITHUB_LOGIN_PATTERN.test(normalizedUsername)
@@ -105,7 +123,7 @@ export function Homepage({
                 </Button>
               </form>
               <p className="mt-3 text-[13px] leading-[1.5] font-normal text-muted-foreground">
-                {PUBLIC_DEPLOYMENT ? (
+                {!privateDashboard ? (
                   <>
                     Private dashboards are available when you self-host with
                     GitHub OAuth.
@@ -114,12 +132,12 @@ export function Homepage({
                   <>
                     Or{" "}
                     <a
-                      href="/auth/login"
+                      href={privateDashboard === "local" ? "/dashboard" : "/auth/login"}
                       className="font-medium underline underline-offset-3"
                     >
-                      sign in with GitHub
+                      {privateDashboard === "local" ? "open your local dashboard" : "sign in with GitHub"}
                     </a>{" "}
-                    for private repos, workflow runs, and billing.
+                    {privateDashboard === "local" ? " using your GitHub CLI credentials." : " for private repos, workflow runs, and billing."}
                   </>
                 )}
               </p>
@@ -161,13 +179,12 @@ export function Homepage({
             </HomepageFeature>
             <HomepageFeature
               title={
-                PUBLIC_DEPLOYMENT
-                  ? "Private mode when self-hosted"
-                  : "Sign in for everything"
+                privateDashboard === "local" ? "Your local dashboard" : privateDashboard === "oauth" ? "Sign in for everything" : "Private mode when self-hosted"
               }
             >
-              GitHub OAuth unlocks private repos, workflow runs, and Actions
-              billing on a standalone deployment.
+              {privateDashboard === "local"
+                ? "Your authenticated GitHub CLI unlocks private repos, workflow runs, and Actions billing locally."
+                : "GitHub OAuth unlocks private repos, workflow runs, and Actions billing on a standalone deployment."}
             </HomepageFeature>
             <HomepageFeature title="Self-host or run local">
               Open source. Run it on your machine against the{" "}

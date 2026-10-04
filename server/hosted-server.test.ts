@@ -764,7 +764,7 @@ describe("hosted request handler", () => {
     }, { rateLimiters, trustProxy: true })
   })
 
-  it("returns a GitHub quota recovery payload for public dashboards", async () => {
+  it.each([403, 429])("returns a GitHub quota recovery payload for upstream %s", async (status) => {
     const loadPublicDashboard: HostedServerDependencies["loadPublicDashboard"] = async () => {
       const error = new Error("GitHub API returned 403 for /users/buluma. API rate limit exceeded.") as Error & {
         code: "github_rate_limit"
@@ -775,7 +775,7 @@ describe("hosted request handler", () => {
       error.code = "github_rate_limit"
       error.retryAfterSeconds = 120
       error.retryAt = "2026-06-12T03:00:00.000Z"
-      error.status = 403
+      error.status = status
       throw error
     }
 
@@ -1162,5 +1162,17 @@ describe("PR merge endpoint", () => {
       expect(JSON.parse(upstream.mock.calls[0][1].body).merge_method).toBe("squash");
       expect(upstream.mock.calls[0][1].headers.Authorization).toBe("Bearer gho_token");
     });
+  });
+});
+
+
+describe("runtime capabilities", () => {
+  it.each([true, false])("reports configured OAuth capability: %s", async (oauth) => {
+    await withFixture(async (fixture) => {
+      const response = await fixture.request("/api/capabilities");
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({ privateDashboard: oauth ? "oauth" : null });
+      expect(header(response, "cache-control")).toContain("no-store");
+    }, { clientId: oauth ? "client-id" : "", clientSecret: oauth ? "client-secret" : "" });
   });
 });

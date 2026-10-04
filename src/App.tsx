@@ -17,6 +17,7 @@ function App() {
   return (
     <Suspense fallback={<DashboardLoading />}>
       <DashboardPage
+        key={route.demoMode ? "demo" : route.publicUsername ?? "session"}
         demoMode={route.demoMode}
         publicUsername={route.publicUsername}
         theme={theme}

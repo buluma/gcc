@@ -8,6 +8,11 @@ import { DashboardRequestError, parseDashboardRequest } from "./server/dashboard
 import { isLocalDashboardRequest, LOCAL_DASHBOARD_ONLY_MESSAGE } from "./server/local-access"
 
 function installGithubDashboardApi(server: ViteDevServer | PreviewServer) {
+  server.middlewares.use("/api/capabilities", (_req, res) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8")
+    res.setHeader("Cache-Control", "no-store")
+    res.end(JSON.stringify({ privateDashboard: "local" } satisfies import("./src/types/github").RuntimeCapabilities))
+  })
   server.middlewares.use(createLocalPrHandler())
   server.middlewares.use("/api/dashboard", async (req, res, next) => {
     if (req.method !== "GET") {

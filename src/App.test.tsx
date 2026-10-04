@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import App from "./App"
 import type { DashboardPayload, RepoSummary } from "./types/github"
 
-const CACHE_KEY = "github-command-center:dashboard-cache:v4:session"
-const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v4:public:buluma"
+const CACHE_KEY = "github-command-center:dashboard-cache:v5:session"
+const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v5:public:buluma"
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/")
@@ -21,7 +21,7 @@ afterEach(() => {
 
 describe("App dashboard cache auth", () => {
   it("renders the minimal root landing without loading a dashboard", async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ privateDashboard: "local" }))
     vi.stubGlobal("fetch", fetchMock)
 
     render(<App />)
@@ -33,11 +33,11 @@ describe("App dashboard cache auth", () => {
     expect(screen.getByRole("link", { name: "/demo" }).getAttribute("href")).toBe("/demo")
     expect(screen.getByText("live with sample data")).toBeTruthy()
     expect(screen.queryByText(/no GitHub calls/i)).toBeNull()
-    expect(screen.getByRole("link", { name: "sign in with GitHub" }).getAttribute("href")).toBe("/auth/login")
+    expect((await screen.findByRole("link", { name: "open your local dashboard" })).getAttribute("href")).toBe("/dashboard")
     expect(screen.getByTitle("Live demo dashboard").getAttribute("src")).toBe("/demo?theme=light&preview=stripless")
     expect(screen.getByText("Public view, no login")).toBeTruthy()
     expect(screen.getByText("Self-host or run local")).toBeTruthy()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledWith("/api/capabilities", expect.any(Object))
   })
 
   it("syncs the homepage theme into the embedded demo route", async () => {
@@ -106,7 +106,7 @@ describe("App dashboard cache auth", () => {
       viewer: createViewer("old-user"),
       repos: [createRepo("old-user/private-repo")],
     }))
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ message: "Sign in" }, 401, "oauth")))
+    vi.stubGlobal("fetch", vi.fn(async (path) => path === "/api/capabilities" ? jsonResponse({ privateDashboard: "oauth" }) : jsonResponse({ message: "Sign in" }, 401, "oauth")))
 
     render(<App />)
 
@@ -234,7 +234,7 @@ describe("App dashboard cache auth", () => {
 
     expect(await findRepoButton("public-repo")).toBeTruthy()
     expect(screen.getByText("GitHub rate limit reached")).toBeTruthy()
-    expect(screen.getByText("Showing cached data while GitHub public data is temporarily unavailable.")).toBeTruthy()
+    expect(screen.getByText("Showing previously loaded data; the latest refresh failed.")).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
@@ -290,7 +290,6 @@ function createRepo(fullName: string, overrides: Partial<RepoSummary> = {}): Rep
     openPullRequests: 0,
     checkState: null,
     latestCommit: null,
-    latestPullRequest: null,
     latestRun: null,
     ...overrides,
   }
@@ -331,7 +330,7 @@ function findRepoButton(name: string) {
   return waitFor(() => {
     const button = queryRepoButton(name)
     expect(button).not.toBeNull()
-    return button
+    return button!
   })
 }
 
@@ -346,3 +345,88 @@ function hashString(value: string) {
   }
   return hash
 }
+
+
+describe("dashboard loading and selection regressions", () => {
+  it.each(["success", "unauthorized", "error"])("ignores an older %s completion after manual refresh", async (kind) => {
+    window.history.replaceState(null, "", "/dashboard");
+    let release!: (response: Response) => void;
+    const older = new Promise<Response>((resolve) => { release = resolve; });
+    const newer = createPayload({ repos: [createRepo("buluma/newer")] });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(createPayload({ detailLevel: "quick" })))
+      .mockReturnValueOnce(older)
+      .mockResolvedValueOnce(jsonResponse(newer));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await findRepoButton("newer");
+    release(kind === "unauthorized" ? jsonResponse({}, 401) : kind === "error" ? jsonResponse({ message: "Older error" }, 500) : jsonResponse(createPayload({ repos: [createRepo("buluma/older")] })));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await findRepoButton("newer")).toBeTruthy();
+    expect(screen.queryByText("Older error")).toBeNull();
+    expect(JSON.parse(window.sessionStorage.getItem(CACHE_KEY)!).payload.repos[0].fullName).toBe("buluma/newer");
+  });
+
+  it("clears selection when hiding a repository and prevents hidden activity filters", async () => {
+    window.history.replaceState(null, "", "/dashboard");
+    const payload = createPayload({ repos: [createRepo("buluma/one"), createRepo("buluma/two")] });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(payload)));
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await findRepoButton("one"));
+    await user.click(screen.getByRole("button", { name: "Hide one" }));
+    expect((screen.getByRole("button", { name: "All repositories" })).className).toContain("bg-muted");
+    await user.click(screen.getByRole("button", { name: /hidden repos/i }));
+    expect((await findRepoButton("one") as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Unhide one" }));
+    expect(screen.getByRole("button", { name: "All repositories" }).className).toContain("bg-muted");
+  });
+
+  it.each(["oauth", null])("renders truthful homepage actions for %s capability", async (privateDashboard) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ privateDashboard })));
+    render(<App />);
+    if (privateDashboard) expect((await screen.findByRole("link", { name: "sign in with GitHub" })).getAttribute("href")).toBe("/auth/login");
+    else {
+      expect(screen.getByText("Private dashboards are available when you self-host with GitHub OAuth.")).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "sign in with GitHub" })).toBeNull();
+    }
+  });
+});
+
+describe("progressive workflow visibility", () => {
+  it.each([true, false])("retains cached failures during a full update (success: %s)", async (success) => {
+    window.history.replaceState(null, "", "/dashboard");
+    const cached = createPayload({ repos: [createRepo("buluma/cached")], ciRuns: [{ id: 31, repo: "buluma/cached", name: "Cached workflow failure", event: "push", status: "completed", conclusion: "failure", branch: "master", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), runStartedAt: null, durationSeconds: null, url: "https://example.com/run" }] });
+    window.sessionStorage.setItem(CACHE_KEY, JSON.stringify({ cachedAt: Date.now() - 11 * 60_000, payload: cached }));
+    let finish!: (value: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(createPayload({ detailLevel: "quick" }))).mockReturnValueOnce(new Promise<Response>((resolve) => { finish = resolve; })));
+    render(<App />);
+    await screen.findAllByText("Cached workflow failure");
+    expect(within(document.getElementById("ci")!).getByText("Cached workflow failure")).toBeTruthy();
+    expect(screen.getByText("Workflow details updating")).toBeTruthy();
+    finish(success ? jsonResponse(createPayload({ repos: [createRepo("buluma/fresh")] })) : jsonResponse({ message: "Refresh failed" }, 500));
+    if (success) {
+      await findRepoButton("fresh");
+      expect(screen.queryByText("Cached workflow failure")).toBeNull();
+    } else {
+      expect(await screen.findByText("Showing previously loaded data; the latest refresh failed.")).toBeTruthy();
+      expect(within(document.getElementById("ci")!).getByText("Cached workflow failure")).toBeTruthy();
+    }
+  });
+
+  it("keeps scan coverage independent of search and hidden repositories", async () => {
+    window.history.replaceState(null, "", "/dashboard");
+    const payload = createPayload({ scanLimit: 8, repos: Array.from({ length: 10 }, (_, index) => createRepo(`buluma/repository-${index}`)) });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(payload)));
+    render(<App />);
+    await findRepoButton("repository-0");
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox", { name: /search/i }), "repository-0");
+    expect(screen.getByText("8 of 10 repositories scanned")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Hide repository-0" }));
+    expect(screen.getByText("8 of 10 repositories scanned")).toBeTruthy();
+  });
+});

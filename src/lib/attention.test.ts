@@ -75,7 +75,6 @@ function makeRepo(overrides: Partial<RepoSummary> = {}): RepoSummary {
     openPullRequests: 0,
     checkState: null,
     latestCommit: null,
-    latestPullRequest: null,
     latestRun: null,
     ...overrides,
   };

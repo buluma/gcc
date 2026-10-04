@@ -49,12 +49,28 @@ input once, then call the dashboard service with the canonical option shape.
 
 - Full dashboard results are cached in memory for five minutes; quick results
   are cached for one minute.
-- Repository detail refreshes are bounded by `scanLimit` and cached for one day.
+- Repository details contain only the latest commit. Public `scanLimit` is capped
+  at 16 (default 16); authenticated requests default to 24 with a maximum of 60.
+  With at most ten repository-list pages, a public full load uses at most 45
+  GitHub requests; quick plus full uses at most 47. No unused latest-PR fetch remains.
+- Commit details are cached for one day only while the repository activity marker
+  has not advanced. Failed revalidation retains the prior commit and prior marker
+  so the next load retries. Repository and dashboard disk caches use version 2.
+- Each browser source and each server source/detail level has one current request
+  owner. Older completions cannot commit UI state, browser cache, full cache, or
+  repository detail entries. A manual refresh aborts the initial quick/full sequence.
 - Local repository details may persist under `.cache/`; hosted user data remains
   process-local.
 - Browser dashboard payloads are source-scoped in session storage and expire
   after ten minutes.
-- Partial GitHub results must include warnings. A truncated or failed upstream
+- `/api/capabilities` returns only whether private dashboards use local CLI, OAuth,
+  or are unavailable, with no-store caching. Homepage actions follow that runtime
+  capability; no credential or identity is returned.
+- Workflow coverage uses the unfiltered repository count and effective scan limit.
+  Quick responses report coverage and billing as loading; existing workflow
+  failures remain visible during background updates. Hidden repository rows can
+  only be managed, and hiding a selected repository clears its activity filter.
+- Partial GitHub results, including GraphQL data accompanied by errors, must include warnings. A truncated or failed upstream
   result must not look complete.
 
 ## Security boundaries

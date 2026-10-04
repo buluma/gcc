@@ -348,7 +348,6 @@ function repo(now: number, input: RepoInput): RepoSummary {
     openPullRequests: input.openPullRequests,
     checkState: input.checkState,
     latestCommit: null,
-    latestPullRequest: null,
     latestRun,
   }
 }

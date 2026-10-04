@@ -36,7 +36,6 @@ export type RepoSummary = {
   openPullRequests: number | null;
   checkState: string | null;
   latestCommit: CommitSummary | null;
-  latestPullRequest: IssueSummary | null;
   latestRun: WorkflowRunSummary | null;
 };
 
@@ -183,3 +182,7 @@ export interface PullRequestDetailResponse {
   reviewRequestedTeams: Array<{ name: string; viewerIsMember: boolean }>
   reviewRequestsTruncated: boolean
 }
+
+export type RuntimeCapabilities = {
+  privateDashboard: "local" | "oauth" | null;
+};

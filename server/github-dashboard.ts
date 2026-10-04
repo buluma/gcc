@@ -64,11 +64,15 @@ const MAX_CACHED_USERS = 200;
 const fullCaches = new Map<string, CacheEntry>();
 const quickCaches = new Map<string, CacheEntry>();
 const inFlightDashboards = new Map<string, Promise<DashboardPayload>>();
+const loadOwners = new Map<string, object>();
 const repoDetailsCaches = new Map<string, RepoDetailsCacheFile>();
 let localRepoDetailsCacheLoaded = false;
 let skipRepoDetailsCacheWrites = false;
+let repoCacheWrites = Promise.resolve();
+let dashboardCacheWrites = Promise.resolve();
 
 type DashboardCacheFile = {
+  version: 2;
   full?: CacheEntry;
   quick?: CacheEntry;
 };
@@ -180,18 +184,6 @@ type RawCommit = {
   };
 };
 
-type RawPullRequest = {
-  id: number;
-  number: number;
-  title: string;
-  state: string;
-  html_url: string;
-  updated_at: string;
-  created_at: string;
-  user?: { login: string };
-  draft?: boolean;
-};
-
 type RawWorkflowRun = {
   id: number;
   name: string | null;
@@ -237,7 +229,6 @@ type BillingUsageItem = {
 
 type RepoLatestDetails = {
   latestCommit: CommitSummary | null;
-  latestPullRequest: IssueSummary | null;
 };
 
 type RepoDetailsCacheEntry = RepoLatestDetails & {
@@ -246,7 +237,7 @@ type RepoDetailsCacheEntry = RepoLatestDetails & {
 };
 
 type RepoDetailsCacheFile = {
-  version: 1;
+  version: 2;
   repos: Record<string, RepoDetailsCacheEntry>;
 };
 
@@ -288,7 +279,9 @@ async function getGithubDashboardInner(
   } = {},
 ): Promise<DashboardPayload> {
   const now = Date.now();
-  const scanLimit = clamp(options.scanLimit ?? 24, 8, 60);
+  const scanLimit = currentPublicLogin()
+    ? clamp(options.scanLimit ?? 16, 8, 16)
+    : clamp(options.scanLimit ?? 24, 8, 60);
   const quick = Boolean(options.quick);
   const force = Boolean(options.force);
   const cached = getCachedDashboard({ force, quick, scanLimit, now });
@@ -301,7 +294,11 @@ async function getGithubDashboardInner(
   const existing = inFlightDashboards.get(inFlightKey);
   if (existing) return existing;
 
-  const promise = loadGithubDashboard({ quick, scanLimit, now });
+  const ownerKey = `${currentCacheKey()}:${quick ? "quick" : "full"}`;
+  const owner = {};
+  boundedMapSet(loadOwners, ownerKey, owner);
+  const isCurrent = () => loadOwners.get(ownerKey) === owner;
+  const promise = loadGithubDashboard({ quick, scanLimit, now, isCurrent });
   inFlightDashboards.set(inFlightKey, promise);
 
   try {
@@ -397,15 +394,19 @@ async function loadGithubDashboard({
   quick,
   scanLimit,
   now,
+  isCurrent,
 }: {
   quick: boolean;
   scanLimit: number;
   now: number;
+  isCurrent: () => boolean;
 }): Promise<DashboardPayload> {
   if (quick) {
     const payload = await getQuickDashboard(scanLimit);
-    boundedMapSet(quickCaches, currentCacheKey(), { timestamp: now, payload });
-    await saveDashboardCache();
+    if (isCurrent()) {
+      boundedMapSet(quickCaches, currentCacheKey(), { timestamp: now, payload });
+      await saveDashboardCache();
+    }
     return payload;
   }
 
@@ -427,7 +428,7 @@ async function loadGithubDashboard({
   const [repoDetails, runs, pullRequestsRaw, issues, billing, reviewRequestedIds] =
     await promiseAllWithTimeout(
       [
-        getPerRepoLatestDetails(enrichedRepos, scanRepos, warnings, now),
+        getPerRepoLatestDetails(enrichedRepos, scanRepos, warnings, now, isCurrent),
         getWorkflowRuns(scanRepos, warnings),
         getSearchItems(
           `is:pr involves:${viewer.login} archived:false`,
@@ -519,8 +520,10 @@ async function loadGithubDashboard({
     warnings,
   };
 
-  boundedMapSet(fullCaches, currentCacheKey(), { timestamp: now, payload });
-  await saveDashboardCache();
+  if (isCurrent()) {
+    boundedMapSet(fullCaches, currentCacheKey(), { timestamp: now, payload });
+    await saveDashboardCache();
+  }
   return payload;
 }
 
@@ -652,6 +655,7 @@ async function getRepoGraphData(
   try {
     for (let page = 0; page < maxPages; page += 1) {
       const raw = await ghGraphql<{
+        errors?: unknown[];
         data?: {
           user?: {
             repositories?: {
@@ -665,6 +669,10 @@ async function getRepoGraphData(
         };
       }>(query, { login, first: String(GRAPHQL_REPO_PAGE_SIZE), after });
 
+      if (raw.errors?.length) warnings.push({
+        area: "repo counts",
+        message: "Repository count enrichment returned partial GraphQL data; some repository counts or checks are unknown.",
+      });
       const repositories = raw.data?.user?.repositories;
       nodes.push(...(repositories?.nodes ?? []));
       const pageInfo = repositories?.pageInfo;
@@ -697,6 +705,7 @@ async function getPerRepoLatestDetails(
   refreshRepos: RepoSummary[],
   warnings: DashboardWarning[],
   now: number,
+  isCurrent: () => boolean,
 ): Promise<Map<string, RepoLatestDetails>> {
   const cache = await loadRepoDetailsCache();
   const refreshRepoNames = new Set(refreshRepos.map((repo) => repo.fullName));
@@ -725,7 +734,7 @@ async function getPerRepoLatestDetails(
       return;
     }
 
-    if (freshCached) {
+    if (freshCached && (!activityAt || (cached.activityAt && activityAt <= cached.activityAt))) {
       detailsByRepo.set(repo.fullName, toRepoLatestDetails(freshCached));
       return;
     }
@@ -738,51 +747,40 @@ async function getPerRepoLatestDetails(
       return;
     }
 
-    const [commitResult, pullRequestResult] = await Promise.allSettled([
-      getLatestRepoCommit(repo),
-      getLatestRepoPullRequest(repo),
-    ]);
-    const refreshSucceeded =
-      commitResult.status === "fulfilled" &&
-      pullRequestResult.status === "fulfilled";
-    if (!refreshSucceeded) {
-      failedRefreshes += 1;
-    }
+    const commitResult = await Promise.allSettled([getLatestRepoCommit(repo)]).then(([result]) => result);
+    const refreshSucceeded = commitResult.status === "fulfilled";
+    if (!refreshSucceeded) failedRefreshes += 1;
 
     const details: RepoLatestDetails = {
       latestCommit:
         commitResult.status === "fulfilled"
           ? commitResult.value
           : (cached?.latestCommit ?? null),
-      latestPullRequest:
-        pullRequestResult.status === "fulfilled"
-          ? pullRequestResult.value
-          : (cached?.latestPullRequest ?? null),
     };
-    cache.repos[repo.fullName] = {
+    if (isCurrent()) cache.repos[repo.fullName] = {
       ...details,
       refreshedAt: refreshSucceeded ? now : (cached?.refreshedAt ?? 0),
-      activityAt,
+      activityAt: refreshSucceeded ? activityAt : (cached?.activityAt ?? null),
     };
     dirty = true;
     detailsByRepo.set(repo.fullName, details);
   });
 
-  if (dirty) {
+  if (dirty && isCurrent()) {
     await writeRepoDetailsCache(cache);
   }
 
   if (failedRefreshes > 0) {
     warnings.push({
       area: "repo details",
-      message: `Latest commit or pull request refresh failed for ${failedRefreshes} repositories.`,
+      message: `Latest commit refresh failed for ${failedRefreshes} repositories.`,
     });
   }
 
   if (activeReposOutsideRefreshScope > 0) {
     warnings.push({
       area: "repo details",
-      message: `Latest commit and pull request refresh is limited to ${refreshRepos.length} of ${repos.length} repositories; active repositories outside the live refresh scope: ${activeReposOutsideRefreshScope}.`,
+      message: `Latest commit refresh is limited to ${refreshRepos.length} of ${repos.length} repositories; active repositories outside the live refresh scope: ${activeReposOutsideRefreshScope}.`,
     });
   }
 
@@ -799,16 +797,6 @@ async function getLatestRepoCommit(
   );
   const commit = commits[0];
   return commit ? toCommitSummary(repo.fullName, commit) : null;
-}
-
-async function getLatestRepoPullRequest(
-  repo: RepoSummary,
-): Promise<IssueSummary | null> {
-  const pullRequests = await ghJson<RawPullRequest[]>(
-    `/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/pulls?state=all&sort=updated&direction=desc&per_page=1`,
-  );
-  const pullRequest = pullRequests[0];
-  return pullRequest ? toPullRequestSummary(repo.fullName, pullRequest) : null;
 }
 
 async function loadRepoDetailsCache(): Promise<RepoDetailsCacheFile> {
@@ -842,26 +830,29 @@ async function writeRepoDetailsCache(cache: RepoDetailsCacheFile) {
   if (skipRepoDetailsCacheWrites || currentCacheKey() !== LOCAL_CACHE_KEY)
     return;
 
-  try {
-    await mkdir(dirname(REPO_DETAILS_CACHE_PATH), { recursive: true });
-    await writeFile(REPO_DETAILS_CACHE_PATH, JSON.stringify(cache, null, 2));
-  } catch {
-    // Repo detail caching is best-effort. A dashboard fetch should still render.
-  }
+  repoCacheWrites = repoCacheWrites.then(async () => {
+    try {
+      await mkdir(dirname(REPO_DETAILS_CACHE_PATH), { recursive: true });
+      await writeFile(REPO_DETAILS_CACHE_PATH, JSON.stringify(cache, null, 2));
+    } catch {
+      // Repo detail caching is best-effort. A dashboard fetch should still render.
+    }
+  });
+  await repoCacheWrites;
 }
 
 async function loadDashboardCache(): Promise<DashboardCacheFile> {
   if (localDashboardCacheLoaded) {
     const full = fullCaches.get(LOCAL_CACHE_KEY);
     const quick = quickCaches.get(LOCAL_CACHE_KEY);
-    return { full: full ?? undefined, quick: quick ?? undefined };
+    return { version: 2, full: full ?? undefined, quick: quick ?? undefined };
   }
   localDashboardCacheLoaded = true;
   try {
     const parsed = JSON.parse(
       await readFile(DASHBOARD_CACHE_PATH, "utf8"),
     ) as unknown;
-    if (parsed && typeof parsed === "object") {
+    if (isRecord(parsed) && parsed.version === 2) {
       const file = parsed as Record<string, unknown>;
       if (
         file.full &&
@@ -881,23 +872,27 @@ async function loadDashboardCache(): Promise<DashboardCacheFile> {
   }
   const full = fullCaches.get(LOCAL_CACHE_KEY);
   const quick = quickCaches.get(LOCAL_CACHE_KEY);
-  return { full: full ?? undefined, quick: quick ?? undefined };
+  return { version: 2, full: full ?? undefined, quick: quick ?? undefined };
 }
 
 async function saveDashboardCache() {
-  if (currentCacheKey() !== LOCAL_CACHE_KEY) return;
-  const full = fullCaches.get(LOCAL_CACHE_KEY);
-  const quick = quickCaches.get(LOCAL_CACHE_KEY);
-  if (!full && !quick) return;
-  try {
-    await mkdir(dirname(DASHBOARD_CACHE_PATH), { recursive: true });
-    const file: DashboardCacheFile = {};
-    if (full) file.full = full;
-    if (quick) file.quick = quick;
-    await writeFile(DASHBOARD_CACHE_PATH, JSON.stringify(file));
-  } catch {
-    // Dashboard caching is best-effort. Stale data is better than no data.
-  }
+  if (skipRepoDetailsCacheWrites || currentCacheKey() !== LOCAL_CACHE_KEY) return;
+  dashboardCacheWrites = dashboardCacheWrites.then(async () => {
+    // Serialize writes and snapshot the latest committed state when our turn runs.
+    const full = fullCaches.get(LOCAL_CACHE_KEY);
+    const quick = quickCaches.get(LOCAL_CACHE_KEY);
+    if (!full && !quick) return;
+    try {
+      await mkdir(dirname(DASHBOARD_CACHE_PATH), { recursive: true });
+      const file: DashboardCacheFile = { version: 2 };
+      if (full) file.full = full;
+      if (quick) file.quick = quick;
+      await writeFile(DASHBOARD_CACHE_PATH, JSON.stringify(file));
+    } catch {
+      // Dashboard caching is best-effort. Stale data is better than no data.
+    }
+  });
+  await dashboardCacheWrites;
 }
 
 function getRepoActivityAt(repo: RepoSummary) {
@@ -918,14 +913,12 @@ function isRecentlyActive(activityAt: string | null, now: number) {
 function emptyRepoLatestDetails(): RepoLatestDetails {
   return {
     latestCommit: null,
-    latestPullRequest: null,
   };
 }
 
 function toRepoLatestDetails(entry: RepoDetailsCacheEntry): RepoLatestDetails {
   return {
     latestCommit: entry.latestCommit,
-    latestPullRequest: entry.latestPullRequest,
   };
 }
 
@@ -1234,7 +1227,6 @@ function toRepoSummary(
     checkState:
       graph?.defaultBranchRef?.target?.statusCheckRollup?.state ?? null,
     latestCommit: null,
-    latestPullRequest: null,
     latestRun: null,
   };
 }
@@ -1278,25 +1270,6 @@ function toIssueSummary(
   };
 }
 
-function toPullRequestSummary(
-  repo: string,
-  item: RawPullRequest,
-): IssueSummary {
-  return {
-    id: item.id,
-    number: item.number,
-    repo,
-    title: item.title,
-    state: item.state,
-    url: item.html_url,
-    updatedAt: item.updated_at,
-    createdAt: item.created_at,
-    author: item.user?.login ?? null,
-    labels: [],
-    isPullRequest: true,
-    isDraft: Boolean(item.draft),
-  };
-}
 
 function toWorkflowRunSummary(
   repo: string,
@@ -1406,13 +1379,13 @@ async function mapLimit<T, R>(
 
 function createEmptyRepoDetailsCache(): RepoDetailsCacheFile {
   return {
-    version: 1,
+    version: 2,
     repos: {},
   };
 }
 
 function normalizeRepoDetailsCache(value: unknown): RepoDetailsCacheFile {
-  if (!isRecord(value) || value.version !== 1 || !isRecord(value.repos)) {
+  if (!isRecord(value) || value.version !== 2 || !isRecord(value.repos)) {
     return createEmptyRepoDetailsCache();
   }
 
@@ -1423,7 +1396,7 @@ function normalizeRepoDetailsCache(value: unknown): RepoDetailsCacheFile {
   }
 
   return {
-    version: 1,
+    version: 2,
     repos,
   };
 }
@@ -1435,9 +1408,7 @@ function isRepoDetailsCacheEntry(
     isRecord(value) &&
     Number.isFinite(value.refreshedAt) &&
     (typeof value.activityAt === "string" || value.activityAt === null) &&
-    (value.latestCommit === null || isCommitSummary(value.latestCommit)) &&
-    (value.latestPullRequest === null ||
-      isIssueSummary(value.latestPullRequest))
+    (value.latestCommit === null || isCommitSummary(value.latestCommit))
   );
 }
 
@@ -1454,22 +1425,6 @@ function isCommitSummary(value: unknown): value is CommitSummary {
   );
 }
 
-function isIssueSummary(value: unknown): value is IssueSummary {
-  return (
-    isRecord(value) &&
-    Number.isFinite(value.id) &&
-    Number.isFinite(value.number) &&
-    typeof value.repo === "string" &&
-    typeof value.title === "string" &&
-    typeof value.state === "string" &&
-    typeof value.url === "string" &&
-    typeof value.updatedAt === "string" &&
-    typeof value.createdAt === "string" &&
-    (typeof value.author === "string" || value.author === null) &&
-    Array.isArray(value.labels) &&
-    typeof value.isPullRequest === "boolean"
-  );
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -1503,6 +1458,7 @@ export function configureGithubDashboardForTests(executor: GhExecutor | null) {
   ghExecutor = executor ?? execGh;
   fullCaches.clear();
   quickCaches.clear();
+  loadOwners.clear();
   repoDetailsCaches.clear();
   if (executor)
     repoDetailsCaches.set(LOCAL_CACHE_KEY, createEmptyRepoDetailsCache());

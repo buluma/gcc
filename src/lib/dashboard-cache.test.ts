@@ -7,8 +7,8 @@ import {
   writeDashboardCacheToStorage,
 } from "./dashboard-cache"
 
-const CACHE_KEY = "github-command-center:dashboard-cache:v4:session"
-const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v4:public:buluma"
+const CACHE_KEY = "github-command-center:dashboard-cache:v5:session"
+const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v5:public:buluma"
 
 function createStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial))

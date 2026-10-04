@@ -248,6 +248,7 @@ export default function DashboardPage({
     demoMode ? "demo" : publicUsername ? "public" : "local",
   );
   const [needsLogin, setNeedsLogin] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const canMerge = !demoMode && !publicUsername && (authMode === "local" || authMode === "oauth");
@@ -293,19 +294,26 @@ export default function DashboardPage({
 
   const loadDashboard = useCallback(
     async (force = false) => {
+      activeRequest.current?.abort();
+      const controller = new AbortController();
+      activeRequest.current = controller;
+      const isCurrent = () => activeRequest.current === controller && !controller.signal.aborted;
       setError(null);
       setRefreshing(force);
+      setUpdatingDetails(true);
 
       if (demoMode) {
         setData(createDemoDashboard());
         setNeedsLogin(false);
         setLoading(false);
         setRefreshing(false);
+        setUpdatingDetails(false);
         return;
       }
 
       try {
-        const result = await requestDashboard(dashboardApiPath({ force }));
+        const result = await requestDashboard(dashboardApiPath({ force }), controller.signal);
+        if (!isCurrent()) return;
         if (result.kind === "unauthorized") {
           clearDashboardCache(dashboardSourceKey);
           setData(null);
@@ -317,24 +325,29 @@ export default function DashboardPage({
         setData(result.payload);
         writeDashboardCache(dashboardSourceKey, result.payload);
       } catch (requestError) {
-        setError(toDashboardErrorState(requestError));
+        if (isCurrent() && !isAbortError(requestError)) setError(toDashboardErrorState(requestError, { stale: Boolean(data) }));
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (isCurrent()) {
+          setLoading(false);
+          setRefreshing(false);
+          setUpdatingDetails(false);
+        }
       }
     },
-    [dashboardApiPath, dashboardSourceKey, demoMode],
+    [dashboardApiPath, dashboardSourceKey, demoMode, data],
   );
 
   useEffect(() => {
     if (demoMode) return;
 
-    let cancelled = false;
+    activeRequest.current?.abort();
     const controller = new AbortController();
+    activeRequest.current = controller;
+    const isCurrent = () => activeRequest.current === controller && !controller.signal.aborted;
 
     async function fetchDashboard(path: string) {
       const result = await requestDashboard(path, controller.signal);
-      if (cancelled) return null;
+      if (!isCurrent()) return null;
       if (result.kind === "unauthorized") {
         clearDashboardCache(dashboardSourceKey);
         setData(null);
@@ -350,7 +363,7 @@ export default function DashboardPage({
       let quickPayload: DashboardPayload | null = null;
       try {
         quickPayload = await fetchDashboard(dashboardApiPath({ quick: true }));
-        if (!cancelled) {
+        if (isCurrent()) {
           if (!quickPayload) {
             setLoading(false);
             return;
@@ -371,7 +384,7 @@ export default function DashboardPage({
           }
         }
       } catch (requestError) {
-        if (!cancelled && !isAbortError(requestError)) {
+        if (isCurrent() && !isAbortError(requestError)) {
           const stale =
             isGithubRateLimitRequestError(requestError) &&
             cacheMatchesPublicViewer(initialDashboardCache, publicUsername);
@@ -384,35 +397,32 @@ export default function DashboardPage({
           setLoading(false);
         }
       }
-      if (cancelled || !quickPayload) return;
+      if (!isCurrent() || !quickPayload) return;
 
-      if (!cancelled) setUpdatingDetails(true);
+      if (isCurrent()) setUpdatingDetails(true);
       try {
         const payload = await fetchDashboard(dashboardApiPath());
-        if (!cancelled && payload) {
+        if (isCurrent() && payload) {
           setData(payload);
           writeDashboardCache(dashboardSourceKey, payload);
         }
       } catch (requestError) {
-        if (!cancelled && !isAbortError(requestError)) {
+        if (isCurrent() && !isAbortError(requestError)) {
           setError(
             toDashboardErrorState(requestError, {
-              stale:
-                isGithubRateLimitRequestError(requestError) &&
-                cacheMatchesPublicViewer(initialDashboardCache, publicUsername),
+              stale: true,
             }),
           );
         }
       } finally {
-        if (!cancelled) setUpdatingDetails(false);
+        if (isCurrent()) setUpdatingDetails(false);
       }
     }
 
     void loadInitialDashboard();
 
     return () => {
-      cancelled = true;
-      controller.abort();
+      activeRequest.current?.abort();
     };
   }, [
     dashboardApiPath,
@@ -451,6 +461,7 @@ export default function DashboardPage({
 
   const handleRepoScopeChange = useCallback((value: RepoScope) => {
     setRepoScope(value);
+    if (value === "hidden") setSelectedRepo(null);
   }, []);
 
   const handleOpenPRDetail = useCallback(
@@ -572,11 +583,17 @@ export default function DashboardPage({
                         repoHealth={repoHealth}
                         onScopeChange={handleRepoScopeChange}
                         onSelectRepo={setSelectedRepo}
-                        onToggleRepoHidden={toggleRepoHidden}
+                        onToggleRepoHidden={(id) => {
+                          if (data.repos.find((repo) => repo.id === id)?.fullName === selectedRepo) setSelectedRepo(null);
+                          toggleRepoHidden(id);
+                        }}
                         onOpenPRDetail={publicUsername ? undefined : handleOpenPRDetail}
                         onMergeComplete={() => void loadDashboard(true)}
                       />
                       <OperationalRail
+                        detailLevel={data.detailLevel}
+                        scannedCount={Math.min(data.scanLimit, data.repos.length)}
+                        totalCount={data.repos.length}
                         billing={data.billing}
                         isUpdating={updatingDetails}
                         runs={view.visibleRuns}
@@ -1026,8 +1043,7 @@ function ErrorPanel({
             <p>{error.message}</p>
             {error.stale ? (
               <p>
-                Showing cached data while GitHub public data is temporarily
-                unavailable.
+                Showing previously loaded data; the latest refresh failed.
               </p>
             ) : null}
             {retryMessage ? <p>{retryMessage}</p> : null}
