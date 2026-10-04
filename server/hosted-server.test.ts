@@ -80,10 +80,10 @@ const DASHBOARD_PAYLOAD: DashboardPayload = {
   detailLevel: "quick",
   scanLimit: 24,
   viewer: {
-    login: "jskoiz",
+    login: "buluma",
     name: "saburo",
     avatarUrl: "https://example.com/avatar.png",
-    profileUrl: "https://github.com/jskoiz",
+    profileUrl: "https://github.com/buluma",
   },
   repos: [],
   recentCommits: [],
@@ -136,7 +136,7 @@ async function startFixture(options: FixtureOptions = {}): Promise<Fixture> {
     },
     fetchViewerLogin: async (token) => {
       calls.viewerTokens.push(token)
-      return "jskoiz"
+      return "buluma"
     },
     revokeOAuthToken: async (revokeOptions) => {
       calls.revocations.push(revokeOptions)
@@ -253,7 +253,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
   return {
     id: `session-${sessionCounter}`,
     token: "gho_token",
-    login: "jskoiz",
+    login: "buluma",
     issuedAt: Date.now(),
     ...overrides,
   }
@@ -535,7 +535,7 @@ describe("hosted request handler", () => {
       expect(openSession(sessionValue, fixture.sessionKey)).toMatchObject({
         id: expect.any(String),
         token: "gho_token",
-        login: "jskoiz",
+        login: "buluma",
       })
       expect(stateClearCookie).toContain("Max-Age=0")
     })
@@ -661,13 +661,13 @@ describe("hosted request handler", () => {
 
   it("loads public username dashboards without an OAuth session", async () => {
     await withFixture(async (fixture) => {
-      const response = await fixture.request("/api/dashboard/jskoiz?quick=1&scanLimit=12")
+      const response = await fixture.request("/api/dashboard/buluma?quick=1&scanLimit=12")
 
       expect(response.status).toBe(200)
       expect(header(response, "x-gcc-auth")).toBe("public")
       expect(JSON.parse(response.body)).toEqual(DASHBOARD_PAYLOAD)
       expect(fixture.calls.publicDashboards).toEqual([{
-        username: "jskoiz",
+        username: "buluma",
         options: {
           force: false,
           quick: true,
@@ -682,7 +682,7 @@ describe("hosted request handler", () => {
     ["/api/dashboard/-invalid", "Invalid GitHub username."],
     ["/api/dashboard/%", "Invalid GitHub username encoding."],
     ["/api/dashboard?scanLimit=8.5", "scanLimit must be an integer from 8 to 60."],
-    ["/api/dashboard/jskoiz?scanLimit=61", "scanLimit must be an integer from 8 to 60."],
+    ["/api/dashboard/buluma?scanLimit=61", "scanLimit must be an integer from 8 to 60."],
   ])("rejects invalid dashboard request %s before loading data", async (path, message) => {
     await withFixture(async (fixture) => {
       const response = await fixture.request(path)
@@ -696,7 +696,7 @@ describe("hosted request handler", () => {
 
   it("loads public username dashboards when OAuth is not configured", async () => {
     await withFixture(async (fixture) => {
-      const response = await fixture.request("/api/dashboard/jskoiz")
+      const response = await fixture.request("/api/dashboard/buluma")
 
       expect(response.status).toBe(200)
       expect(header(response, "x-gcc-auth")).toBe("public")
@@ -712,8 +712,8 @@ describe("hosted request handler", () => {
     })
 
     await withFixture(async (fixture) => {
-      const allowed = await fixture.request("/api/dashboard/jskoiz")
-      const blocked = await fixture.request("/api/dashboard/jskoiz")
+      const allowed = await fixture.request("/api/dashboard/buluma")
+      const blocked = await fixture.request("/api/dashboard/buluma")
 
       expect(allowed.status).toBe(200)
       expect(blocked.status).toBe(429)
@@ -730,7 +730,7 @@ describe("hosted request handler", () => {
     })
 
     await withFixture(async (fixture) => {
-      const allowed = await fixture.request("/api/dashboard/jskoiz")
+      const allowed = await fixture.request("/api/dashboard/buluma")
       const blocked = await fixture.request("/api/dashboard/octocat")
 
       expect(allowed.status).toBe(200)
@@ -739,7 +739,7 @@ describe("hosted request handler", () => {
       expect(header(blocked, "retry-after")).toBe("60")
       expect(JSON.parse(blocked.body)).toEqual(rateLimitPayload())
       expect(fixture.calls.publicDashboards).toEqual([{
-        username: "jskoiz",
+        username: "buluma",
         options: { force: false, quick: false, scanLimit: 24 },
       }])
     }, { rateLimiters })
@@ -751,7 +751,7 @@ describe("hosted request handler", () => {
     })
 
     await withFixture(async (fixture) => {
-      const first = await fixture.request("/api/dashboard/jskoiz", {
+      const first = await fixture.request("/api/dashboard/buluma", {
         headers: { "X-Forwarded-For": "203.0.113.10" },
       })
       const second = await fixture.request("/api/dashboard/octocat", {
@@ -766,7 +766,7 @@ describe("hosted request handler", () => {
 
   it("returns a GitHub quota recovery payload for public dashboards", async () => {
     const loadPublicDashboard: HostedServerDependencies["loadPublicDashboard"] = async () => {
-      const error = new Error("GitHub API returned 403 for /users/jskoiz. API rate limit exceeded.") as Error & {
+      const error = new Error("GitHub API returned 403 for /users/buluma. API rate limit exceeded.") as Error & {
         code: "github_rate_limit"
         retryAfterSeconds: number
         retryAt: string
@@ -780,7 +780,7 @@ describe("hosted request handler", () => {
     }
 
     await withFixture(async (fixture) => {
-      const response = await fixture.request("/api/dashboard/jskoiz?quick=1")
+      const response = await fixture.request("/api/dashboard/buluma?quick=1")
 
       expect(response.status).toBe(403)
       expect(header(response, "x-gcc-auth")).toBe("public")
@@ -800,7 +800,7 @@ describe("hosted request handler", () => {
     }
 
     await withFixture(async (fixture) => {
-      const response = await fixture.request("/api/dashboard/jskoiz")
+      const response = await fixture.request("/api/dashboard/buluma")
 
       expect(response.status).toBe(500)
       expect(header(response, "x-gcc-auth")).toBe("public")
@@ -980,7 +980,7 @@ describe("hosted request handler", () => {
         }),
         fixture.request("/auth/logout", { method: "HEAD", headers: { Cookie: sessionCookie } }),
         fixture.request("/api/dashboard", { method: "HEAD", headers: { Cookie: sessionCookie } }),
-        fixture.request("/api/dashboard/jskoiz", { method: "HEAD" }),
+        fixture.request("/api/dashboard/buluma", { method: "HEAD" }),
       ])
 
       for (const response of headRequests) {
@@ -995,7 +995,7 @@ describe("hosted request handler", () => {
 
       const login = await fixture.request("/auth/login")
       const dashboard = await fixture.request("/api/dashboard", { headers: { Cookie: sessionCookie } })
-      const publicDashboard = await fixture.request("/api/dashboard/jskoiz")
+      const publicDashboard = await fixture.request("/api/dashboard/buluma")
 
       expect(login.status).toBe(302)
       expect(dashboard.status).toBe(200)

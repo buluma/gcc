@@ -52,15 +52,17 @@ Run the Cloudflare runtime locally after building:
 bun run build
 bunx wrangler dev --local --port 8787
 curl --fail http://127.0.0.1:8787/healthz
-curl --fail 'http://127.0.0.1:8787/api/dashboard/jskoiz?quick=1&scanLimit=8'
+curl --fail 'http://127.0.0.1:8787/api/dashboard/buluma?quick=1&scanLimit=8'
 ```
 
 Deploy only after `bun run check` passes:
 
 ```sh
 bun run deploy
-curl --fail https://github-command-center.jskoiz.workers.dev/healthz
-curl --fail 'https://github-command-center.jskoiz.workers.dev/api/dashboard/jskoiz?quick=1&scanLimit=8'
+# Use the HTTPS URL printed by Wrangler for your account.
+export WORKER_URL=https://github-command-center.YOUR_SUBDOMAIN.workers.dev
+curl --fail "${WORKER_URL}/healthz"
+curl --fail "${WORKER_URL}/api/dashboard/buluma?quick=1&scanLimit=8"
 bunx wrangler deployments list
 ```
 

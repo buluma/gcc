@@ -3,8 +3,7 @@
 A focused GitHub homepage for pull requests, issues, commits, CI failures, and
 Actions billing across all your repositories.
 
-The public deployment is live at
-[github-command-center.jskoiz.workers.dev](https://github-command-center.jskoiz.workers.dev).
+Source and support: [buluma/gcc](https://github.com/buluma/gcc).
 
 The root page opens public dashboards at `/username`, a fixture-backed tour at
 `/demo`, or the private dashboard at `/dashboard`. Hidden repositories and
@@ -28,7 +27,7 @@ belong to a requested team; stale scores use the last update time.
 | Mode | Authentication | Best for |
 | --- | --- | --- |
 | Local Vite | Authenticated GitHub CLI | Personal use on one machine |
-| Hosted public | None for `/username` | The live Cloudflare deployment |
+| Hosted public | None for `/username` | Public Cloudflare hosting |
 | Standalone hosted OAuth | GitHub OAuth | Private repositories and billing |
 
 The project supports Node.js 24 LTS only. `.nvmrc` and the Docker image pin the
@@ -59,7 +58,7 @@ GH_BIN=/absolute/path/to/gh bun run dev
 
 ## Hosted modes
 
-Public `/username` routes use public GitHub REST data without login. The live
+Public `/username` routes use public GitHub REST data without login. The
 Cloudflare Worker is intentionally public-only: `/demo` and `/username` work,
 while `/dashboard` reports that OAuth is unavailable. It uses GitHub's anonymous
 REST quota and never uploads the local `gh` token.
@@ -71,10 +70,15 @@ nvm use
 bun install --frozen-lockfile
 bun run check
 bun run deploy
-curl --fail https://github-command-center.jskoiz.workers.dev/healthz
+# Set WORKER_URL to the HTTPS URL printed by Wrangler.
+export WORKER_URL=https://github-command-center.YOUR_SUBDOMAIN.workers.dev
+curl --fail "${WORKER_URL}/healthz"
 ```
 
-`wrangler.jsonc` is the deployment source of truth. `bun run build:worker`
+`wrangler.jsonc` is the deployment source of truth. Wrangler uses the authenticated
+Cloudflare account's Workers subdomain; no account-specific hostname is committed.
+The public Worker does not need `BASE_URL`; standalone OAuth hosts must set it.
+`bun run build:worker`
 produces public-only homepage copy, `server/worker.ts` routes dynamic requests
 through the shared Node HTTP server, and Cloudflare serves the Vite build with
 the headers in `public/_headers`.

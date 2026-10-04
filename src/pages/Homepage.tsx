@@ -13,8 +13,8 @@ import { Input } from "@/components/ui/input";
 import { GITHUB_LOGIN_PATTERN } from "@/types/github";
 import type { Theme } from "@/lib/theme";
 
-const REPO_URL = "https://github.com/jskoiz/github-command-center";
-const X_URL = "https://x.com/jskoiz";
+const REPO_URL = "https://github.com/buluma/gcc";
+const SUPPORT_URL = `${REPO_URL}/issues`;
 const DASHBOARD_PREVIEW_WIDTH = 1240;
 const DASHBOARD_PREVIEW_HEIGHT = 620;
 const DEMO_PREVIEW_VERSION = "stripless";
@@ -187,21 +187,20 @@ export function Homepage({
             className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline"
           >
             <GitHubIcon className="size-[15px]" aria-hidden="true" />
-            jskoiz/github-command-center
+            buluma/gcc
           </a>
           <span>MIT</span>
           <span className="hidden flex-1 min-[620px]:block" />
           <span>
             Questions?{" "}
             <a
-              href={X_URL}
+              href={SUPPORT_URL}
               target="_blank"
               rel="noreferrer"
               className="font-medium text-foreground hover:underline"
             >
-              @jskoiz
-            </a>{" "}
-            on X
+              GitHub issues
+            </a>
           </span>
         </footer>
       </div>

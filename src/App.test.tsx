@@ -6,7 +6,7 @@ import App from "./App"
 import type { DashboardPayload, RepoSummary } from "./types/github"
 
 const CACHE_KEY = "github-command-center:dashboard-cache:v4:session"
-const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v4:public:jskoiz"
+const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v4:public:buluma"
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/")
@@ -59,9 +59,9 @@ describe("App dashboard cache auth", () => {
     render(<App />)
 
     const username = screen.getByRole("textbox", { name: "GitHub username" })
-    await user.type(username, "jskoiz")
+    await user.type(username, "buluma")
 
-    expect(username.closest("form")?.getAttribute("action")).toBe("/jskoiz")
+    expect(username.closest("form")?.getAttribute("action")).toBe("/buluma")
   })
 
   it("keeps demo dashboard links inert", async () => {
@@ -119,12 +119,12 @@ describe("App dashboard cache auth", () => {
   it("uses a fresh cache only after the quick auth check matches the cached viewer", async () => {
     window.history.replaceState(null, "", "/dashboard")
     writeCache(createPayload({
-      viewer: createViewer("jskoiz"),
-      repos: [createRepo("jskoiz/cached-repo")],
+      viewer: createViewer("buluma"),
+      repos: [createRepo("buluma/cached-repo")],
     }))
     const fetchMock = vi.fn(async () => jsonResponse(createPayload({
       detailLevel: "quick",
-      viewer: createViewer("jskoiz"),
+      viewer: createViewer("buluma"),
       repos: [],
     }), 200, "oauth"))
     vi.stubGlobal("fetch", fetchMock)
@@ -179,10 +179,10 @@ describe("App dashboard cache auth", () => {
   })
 
   it("loads username paths through the public dashboard API and cache", async () => {
-    window.history.replaceState(null, "", "/jskoiz")
+    window.history.replaceState(null, "", "/buluma")
     const payload = createPayload({
-      viewer: createViewer("jskoiz"),
-      repos: [createRepo("jskoiz/public-repo", { visibility: "public", isPrivate: false })],
+      viewer: createViewer("buluma"),
+      repos: [createRepo("buluma/public-repo", { visibility: "public", isPrivate: false })],
     })
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ ...payload, detailLevel: "quick", repos: [] }, 200, "public"))
@@ -192,14 +192,14 @@ describe("App dashboard cache auth", () => {
     render(<App />)
 
     expect(await findRepoButton("public-repo")).toBeTruthy()
-    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/jskoiz?quick=1", expect.any(Object))
-    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/jskoiz", expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/buluma?quick=1", expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/buluma", expect.any(Object))
     expect(window.sessionStorage.getItem(PUBLIC_CACHE_KEY)).toBeTruthy()
     expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
   })
 
   it("shows sign-in recovery when a public dashboard hits GitHub quota without cache", async () => {
-    window.history.replaceState(null, "", "/jskoiz")
+    window.history.replaceState(null, "", "/buluma")
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       code: "github_rate_limit",
       message: "GitHub rate limit reached for public dashboards.",
@@ -218,10 +218,10 @@ describe("App dashboard cache auth", () => {
   })
 
   it("renders matching public cache as stale data when GitHub quota is exhausted", async () => {
-    window.history.replaceState(null, "", "/jskoiz")
+    window.history.replaceState(null, "", "/buluma")
     writeCache(createPayload({
-      viewer: createViewer("jskoiz"),
-      repos: [createRepo("jskoiz/public-repo", { visibility: "public", isPrivate: false })],
+      viewer: createViewer("buluma"),
+      repos: [createRepo("buluma/public-repo", { visibility: "public", isPrivate: false })],
     }), PUBLIC_CACHE_KEY)
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       code: "github_rate_limit",
@@ -301,7 +301,7 @@ function createPayload(overrides: Partial<DashboardPayload> = {}): DashboardPayl
     generatedAt: new Date().toISOString(),
     detailLevel: "full",
     scanLimit: 24,
-    viewer: createViewer("jskoiz"),
+    viewer: createViewer("buluma"),
     repos: [],
     recentCommits: [],
     pullRequests: [],
@@ -336,7 +336,7 @@ function findRepoButton(name: string) {
 }
 
 function queryRepoButton(name: string) {
-  return repoSidebar().querySelector(`button[title="jskoiz/${name}"]`)
+  return repoSidebar().querySelector(`button[title="buluma/${name}"]`)
 }
 
 function hashString(value: string) {

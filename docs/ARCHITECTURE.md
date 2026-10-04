@@ -82,7 +82,10 @@ input once, then call the dashboard service with the canonical option shape.
 ## Deployment
 
 The canonical public deployment is the Cloudflare Worker configured by
-`wrangler.jsonc`. Dynamic API, auth-unavailable, and health requests run through
+`wrangler.jsonc`. The public hostname comes from the authenticated Cloudflare
+account's Workers subdomain, not a committed owner-specific `BASE_URL`. OAuth is
+disabled in this runtime, so no public callback origin is required.
+Dynamic API, auth-unavailable, and health requests run through
 the shared Node HTTP handler. Static assets are uploaded from `dist/`; SPA
 routing and response headers are owned by the Cloudflare Assets configuration
 and `public/_headers`.

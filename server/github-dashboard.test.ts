@@ -54,10 +54,10 @@ function createGithubExecutor({
 
     if (endpoint === "user") {
       return JSON.stringify({
-        login: "jskoiz",
+        login: "buluma",
         name: "saburo",
         avatar_url: "https://example.com/avatar.png",
-        html_url: "https://github.com/jskoiz",
+        html_url: "https://github.com/buluma",
       });
     }
 
@@ -165,10 +165,10 @@ function createRawRepo(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     name: "active-repo",
-    full_name: "jskoiz/active-repo",
-    owner: { login: "jskoiz" },
+    full_name: "buluma/active-repo",
+    owner: { login: "buluma" },
     description: null,
-    html_url: "https://github.com/jskoiz/active-repo",
+    html_url: "https://github.com/buluma/active-repo",
     language: "TypeScript",
     visibility: "private",
     private: true,
@@ -194,8 +194,8 @@ function createRawRepos(
     return createRawRepo({
       id: repoNumber,
       name: `repo-${repoNumber}`,
-      full_name: `jskoiz/repo-${repoNumber}`,
-      html_url: `https://github.com/jskoiz/repo-${repoNumber}`,
+      full_name: `buluma/repo-${repoNumber}`,
+      html_url: `https://github.com/buluma/repo-${repoNumber}`,
       pushed_at: "2000-01-01T00:00:00Z",
       updated_at: "2000-01-01T00:00:00Z",
       ...overrides,
@@ -206,7 +206,7 @@ function createRawRepos(
 function createRawCommit(message: string) {
   return {
     sha: "abcdef1234567890",
-    html_url: "https://github.com/jskoiz/active-repo/commit/abcdef1",
+    html_url: "https://github.com/buluma/active-repo/commit/abcdef1",
     commit: {
       message,
       author: {
@@ -223,10 +223,10 @@ function createRawPullRequest() {
     number: 42,
     title: "Update repo dashboard",
     state: "open",
-    html_url: "https://github.com/jskoiz/active-repo/pull/42",
+    html_url: "https://github.com/buluma/active-repo/pull/42",
     updated_at: "2026-06-10T13:00:00Z",
     created_at: "2026-06-10T11:00:00Z",
-    user: { login: "jskoiz" },
+    user: { login: "buluma" },
   };
 }
 
@@ -236,8 +236,8 @@ function createRawSearchIssue(overrides: Record<string, unknown> = {}) {
     number: 1,
     title: "Search result pull request",
     state: "open",
-    html_url: "https://github.com/jskoiz/active-repo/pull/1",
-    repository_url: "https://api.github.com/repos/jskoiz/active-repo",
+    html_url: "https://github.com/buluma/active-repo/pull/1",
+    repository_url: "https://api.github.com/repos/buluma/active-repo",
     updated_at: "2026-06-10T13:00:00Z",
     created_at: "2026-06-10T11:00:00Z",
     user: { login: "someone-else" },
@@ -257,7 +257,7 @@ function createRawWorkflowRun(overrides: Record<string, unknown> = {}) {
     created_at: "2026-06-10T14:00:00Z",
     updated_at: "2026-06-10T14:05:00Z",
     run_started_at: "2026-06-10T14:01:00Z",
-    html_url: "https://github.com/jskoiz/active-repo/actions/runs/900",
+    html_url: "https://github.com/buluma/active-repo/actions/runs/900",
     ...overrides,
   };
 }
@@ -287,10 +287,10 @@ function createAuthenticatedDashboardFetch() {
 
       if (url.endsWith("/user")) {
         return jsonResponse({
-          login: "jskoiz",
+          login: "buluma",
           name: "saburo",
           avatar_url: "https://example.com/avatar.png",
-          html_url: "https://github.com/jskoiz",
+          html_url: "https://github.com/buluma",
         });
       }
       if (url.includes("/user/repos?")) {
@@ -299,8 +299,8 @@ function createAuthenticatedDashboardFetch() {
           createRawRepo({
             id: suffix === "a" ? 1 : 2,
             name: `repo-${suffix}`,
-            full_name: `jskoiz/repo-${suffix}`,
-            html_url: `https://github.com/jskoiz/repo-${suffix}`,
+            full_name: `buluma/repo-${suffix}`,
+            html_url: `https://github.com/buluma/repo-${suffix}`,
           }),
         ]);
       }
@@ -312,7 +312,7 @@ function createAuthenticatedDashboardFetch() {
 function repoNameWithOwner(repo: unknown) {
   return typeof repo === "object" && repo !== null && "full_name" in repo
     ? String(repo.full_name)
-    : "jskoiz/active-repo";
+    : "buluma/active-repo";
 }
 
 const ORIGINAL_GITHUB_ENV = {
@@ -364,15 +364,15 @@ describe("getGithubDashboard review-requested detection", () => {
     const fetchMock = vi.fn(
       async (...[input]: [string | URL | Request, RequestInit?]) => {
         const url = input.toString();
-        if (url.endsWith("/users/jskoiz")) {
+        if (url.endsWith("/users/buluma")) {
           return jsonResponse({
-            login: "jskoiz",
+            login: "buluma",
             name: "saburo",
             avatar_url: "https://example.com/avatar.png",
-            html_url: "https://github.com/jskoiz",
+            html_url: "https://github.com/buluma",
           });
         }
-        if (url.includes("/users/jskoiz/repos?")) {
+        if (url.includes("/users/buluma/repos?")) {
           return jsonResponse([createRawRepo()]);
         }
         if (url.includes("/search/issues?")) {
@@ -385,7 +385,7 @@ describe("getGithubDashboard review-requested detection", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const payload = await getPublicGithubDashboard("jskoiz", { scanLimit: 8 });
+    const payload = await getPublicGithubDashboard("buluma", { scanLimit: 8 });
 
     expect(
       payload.pullRequests.find((pr) => pr.id === 1)?.reviewRequested,
@@ -448,8 +448,8 @@ describe("getGithubDashboard request coalescing", () => {
       }),
     ]);
 
-    expect(firstPayload.repos[0]?.fullName).toBe("jskoiz/repo-a");
-    expect(secondPayload.repos[0]?.fullName).toBe("jskoiz/repo-b");
+    expect(firstPayload.repos[0]?.fullName).toBe("buluma/repo-a");
+    expect(secondPayload.repos[0]?.fullName).toBe("buluma/repo-b");
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
@@ -493,19 +493,19 @@ describe("getGithubDashboard request coalescing", () => {
     expect(repo.latestCommit?.message).toBe("Latest canonical commit");
     expect(repo.latestPullRequest?.number).toBe(42);
     expect(payload.recentCommits.map((commit) => commit.repo)).toEqual([
-      "jskoiz/active-repo",
+      "buluma/active-repo",
     ]);
     expect(
       calls.some(
         (call) =>
-          call.endpoint === "/repos/jskoiz/active-repo/commits?per_page=1",
+          call.endpoint === "/repos/buluma/active-repo/commits?per_page=1",
       ),
     ).toBe(true);
     expect(
       calls.some(
         (call) =>
           call.endpoint ===
-          "/repos/jskoiz/active-repo/pulls?state=all&sort=updated&direction=desc&per_page=1",
+          "/repos/buluma/active-repo/pulls?state=all&sort=updated&direction=desc&per_page=1",
       ),
     ).toBe(true);
   });
@@ -524,14 +524,14 @@ describe("getGithubDashboard request coalescing", () => {
     expect(
       calls.filter(
         (call) =>
-          call.endpoint === "/repos/jskoiz/active-repo/commits?per_page=1",
+          call.endpoint === "/repos/buluma/active-repo/commits?per_page=1",
       ),
     ).toHaveLength(1);
     expect(
       calls.filter(
         (call) =>
           call.endpoint ===
-          "/repos/jskoiz/active-repo/pulls?state=all&sort=updated&direction=desc&per_page=1",
+          "/repos/buluma/active-repo/pulls?state=all&sort=updated&direction=desc&per_page=1",
       ),
     ).toHaveLength(1);
   });
@@ -653,7 +653,7 @@ describe("getGithubDashboard request coalescing", () => {
     });
     expect(
       detailWarnings.map((warning) => warning.message).join("\n"),
-    ).not.toContain("jskoiz/repo-");
+    ).not.toContain("buluma/repo-");
   });
 
   it("preserves cached repo details outside a narrower refresh set", async () => {
@@ -672,7 +672,7 @@ describe("getGithubDashboard request coalescing", () => {
     await getGithubDashboard({ force: true, scanLimit: 9 });
     const payload = await getGithubDashboard({ force: true, scanLimit: 8 });
     const outOfScopeRepo = payload.repos.find(
-      (repo) => repo.fullName === "jskoiz/repo-9",
+      (repo) => repo.fullName === "buluma/repo-9",
     );
 
     expect(outOfScopeRepo?.latestCommit?.message).toBe(
@@ -716,11 +716,11 @@ describe("getGithubDashboard request coalescing", () => {
     vi.setSystemTime(now + 24 * 60 * 60_000 + 1);
     const payload = await getGithubDashboard({ force: true, scanLimit: 8 });
     const outOfScopeRepo = payload.repos.find(
-      (repo) => repo.fullName === "jskoiz/repo-9",
+      (repo) => repo.fullName === "buluma/repo-9",
     );
     const outOfScopeDetailCalls = calls.filter(
       (call) =>
-        call.endpoint.includes("/repos/jskoiz/repo-9/") &&
+        call.endpoint.includes("/repos/buluma/repo-9/") &&
         (call.endpoint.endsWith("/commits?per_page=1") ||
           call.endpoint.includes("/pulls?state=all")),
     );
@@ -788,16 +788,16 @@ describe("getPublicGithubDashboard", () => {
     const fetchMock = vi.fn(
       async (...[input]: [string | URL | Request, RequestInit?]) => {
         const url = input.toString();
-        if (url.endsWith("/users/jskoiz")) {
+        if (url.endsWith("/users/buluma")) {
           return jsonResponse({
-            login: "jskoiz",
+            login: "buluma",
             name: "saburo",
             avatar_url: "https://example.com/avatar.png",
-            html_url: "https://github.com/jskoiz",
+            html_url: "https://github.com/buluma",
           });
         }
         if (
-          url.endsWith("/users/jskoiz/repos?per_page=8&sort=pushed&type=owner")
+          url.endsWith("/users/buluma/repos?per_page=8&sort=pushed&type=owner")
         ) {
           return jsonResponse([
             createRawRepo({
@@ -811,16 +811,16 @@ describe("getPublicGithubDashboard", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const payload = await getPublicGithubDashboard("jskoiz", {
+    const payload = await getPublicGithubDashboard("buluma", {
       force: true,
       quick: true,
       scanLimit: 8,
     });
 
-    expect(payload.viewer.login).toBe("jskoiz");
+    expect(payload.viewer.login).toBe("buluma");
     expect(payload.repos).toHaveLength(1);
     expect(payload.repos[0]).toMatchObject({
-      fullName: "jskoiz/active-repo",
+      fullName: "buluma/active-repo",
       visibility: "public",
       isPrivate: false,
     });
@@ -841,16 +841,16 @@ describe("getPublicGithubDashboard", () => {
     const fetchMock = vi.fn(
       async (...[input]: [string | URL | Request, RequestInit?]) => {
         const url = input.toString();
-        if (url.endsWith("/users/jskoiz")) {
+        if (url.endsWith("/users/buluma")) {
           return jsonResponse({
-            login: "jskoiz",
+            login: "buluma",
             name: "saburo",
             avatar_url: "https://example.com/avatar.png",
-            html_url: "https://github.com/jskoiz",
+            html_url: "https://github.com/buluma",
           });
         }
         if (
-          url.endsWith("/users/jskoiz/repos?per_page=8&sort=pushed&type=owner")
+          url.endsWith("/users/buluma/repos?per_page=8&sort=pushed&type=owner")
         ) {
           return jsonResponse([
             createRawRepo({
@@ -864,7 +864,7 @@ describe("getPublicGithubDashboard", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await getPublicGithubDashboard("jskoiz", {
+    await getPublicGithubDashboard("buluma", {
       force: true,
       quick: true,
       scanLimit: 8,
@@ -887,8 +887,8 @@ describe("getGithubDashboard pagination completeness", () => {
       createRawRepo({
         id: 2,
         name: "partial-repo",
-        full_name: "jskoiz/partial-repo",
-        html_url: "https://github.com/jskoiz/partial-repo",
+        full_name: "buluma/partial-repo",
+        html_url: "https://github.com/buluma/partial-repo",
       }),
     ];
     const { executor } = createGithubExecutor({
@@ -903,8 +903,8 @@ describe("getGithubDashboard pagination completeness", () => {
     const payload = await getGithubDashboard({ force: true, scanLimit: 8 });
 
     expect(payload.repos.map((repo) => repo.fullName)).toEqual([
-      "jskoiz/active-repo",
-      "jskoiz/partial-repo",
+      "buluma/active-repo",
+      "buluma/partial-repo",
     ]);
     expect(payload.warnings).toContainEqual({
       area: "repos",
@@ -949,7 +949,7 @@ describe("getGithubDashboard pagination completeness", () => {
 
     const payload = await getGithubDashboard({ force: true, scanLimit: 8 });
     const lastRepo = payload.repos.find(
-      (repo) => repo.fullName === "jskoiz/repo-1001",
+      (repo) => repo.fullName === "buluma/repo-1001",
     );
 
     expect(calls.filter((call) => call.endpoint === "graphql")).toHaveLength(
@@ -995,17 +995,17 @@ describe("getGithubDashboard workflow run warnings", () => {
       createRawRepo({
         id: 2,
         name: "failing-repo",
-        full_name: "jskoiz/failing-repo",
-        html_url: "https://github.com/jskoiz/failing-repo",
+        full_name: "buluma/failing-repo",
+        html_url: "https://github.com/buluma/failing-repo",
       }),
     ];
     const { executor } = createGithubExecutor({
       repos,
       workflowRunsByRepo: {
-        "jskoiz/active-repo": [createRawWorkflowRun()],
+        "buluma/active-repo": [createRawWorkflowRun()],
       },
       workflowRunFailuresByRepo: {
-        "jskoiz/failing-repo": new Error(
+        "buluma/failing-repo": new Error(
           "Resource not accessible by integration token ghp_fake_secret",
         ),
       },
@@ -1018,14 +1018,14 @@ describe("getGithubDashboard workflow run warnings", () => {
     );
 
     expect(payload.ciRuns.map((run) => run.repo)).toEqual([
-      "jskoiz/active-repo",
+      "buluma/active-repo",
     ]);
     expect(
-      payload.repos.find((repo) => repo.fullName === "jskoiz/active-repo")
+      payload.repos.find((repo) => repo.fullName === "buluma/active-repo")
         ?.latestRun?.name,
     ).toBe("CI");
     expect(ciWarnings.map((warning) => warning.message)).toContain(
-      "Workflow runs could not be loaded for 1 of 2 scanned repositories: jskoiz/failing-repo.",
+      "Workflow runs could not be loaded for 1 of 2 scanned repositories: buluma/failing-repo.",
     );
     expect(
       ciWarnings.map((warning) => warning.message).join("\n"),
@@ -1038,15 +1038,15 @@ describe("getGithubDashboard workflow run warnings", () => {
       createRawRepo({
         id: 2,
         name: "failing-repo",
-        full_name: "jskoiz/failing-repo",
-        html_url: "https://github.com/jskoiz/failing-repo",
+        full_name: "buluma/failing-repo",
+        html_url: "https://github.com/buluma/failing-repo",
       }),
     ];
     const { executor } = createGithubExecutor({
       repos,
       workflowRunFailuresByRepo: {
-        "jskoiz/active-repo": new Error("HTTP 403 ghp_fake_secret"),
-        "jskoiz/failing-repo": new Error("HTTP 500 ghp_fake_secret"),
+        "buluma/active-repo": new Error("HTTP 403 ghp_fake_secret"),
+        "buluma/failing-repo": new Error("HTTP 500 ghp_fake_secret"),
       },
     });
     configureGithubDashboardForTests(executor);
@@ -1058,7 +1058,7 @@ describe("getGithubDashboard workflow run warnings", () => {
 
     expect(payload.ciRuns).toEqual([]);
     expect(ciMessages).toContain(
-      "Workflow runs could not be loaded for 2 of 2 scanned repositories: jskoiz/active-repo, jskoiz/failing-repo.",
+      "Workflow runs could not be loaded for 2 of 2 scanned repositories: buluma/active-repo, buluma/failing-repo.",
     );
     expect(ciMessages).toContain(
       "No workflow runs were returned from scanned repositories.",
@@ -1075,29 +1075,29 @@ describe("getGithubDashboard workflow run warnings", () => {
       createRawRepo({
         id: 2,
         name: "repo-two",
-        full_name: "jskoiz/repo-two",
-        html_url: "https://github.com/jskoiz/repo-two",
+        full_name: "buluma/repo-two",
+        html_url: "https://github.com/buluma/repo-two",
       }),
       createRawRepo({
         id: 3,
         name: "repo-three",
-        full_name: "jskoiz/repo-three",
-        html_url: "https://github.com/jskoiz/repo-three",
+        full_name: "buluma/repo-three",
+        html_url: "https://github.com/buluma/repo-three",
       }),
       createRawRepo({
         id: 4,
         name: "repo-four",
-        full_name: "jskoiz/repo-four",
-        html_url: "https://github.com/jskoiz/repo-four",
+        full_name: "buluma/repo-four",
+        html_url: "https://github.com/buluma/repo-four",
       }),
     ];
     const { executor } = createGithubExecutor({
       repos,
       workflowRunFailuresByRepo: {
-        "jskoiz/active-repo": new Error("HTTP 403 ghp_fake_secret"),
-        "jskoiz/repo-two": new Error("HTTP 403 ghp_fake_secret"),
-        "jskoiz/repo-three": new Error("HTTP 403 ghp_fake_secret"),
-        "jskoiz/repo-four": new Error("HTTP 403 ghp_fake_secret"),
+        "buluma/active-repo": new Error("HTTP 403 ghp_fake_secret"),
+        "buluma/repo-two": new Error("HTTP 403 ghp_fake_secret"),
+        "buluma/repo-three": new Error("HTTP 403 ghp_fake_secret"),
+        "buluma/repo-four": new Error("HTTP 403 ghp_fake_secret"),
       },
     });
     configureGithubDashboardForTests(executor);
@@ -1108,9 +1108,9 @@ describe("getGithubDashboard workflow run warnings", () => {
       .map((warning) => warning.message);
 
     expect(ciMessages).toContain(
-      "Workflow runs could not be loaded for 4 of 4 scanned repositories: jskoiz/active-repo, jskoiz/repo-two, jskoiz/repo-three, and 1 more.",
+      "Workflow runs could not be loaded for 4 of 4 scanned repositories: buluma/active-repo, buluma/repo-two, buluma/repo-three, and 1 more.",
     );
-    expect(ciMessages.join("\n")).not.toContain("jskoiz/repo-four");
+    expect(ciMessages.join("\n")).not.toContain("buluma/repo-four");
     expect(ciMessages.join("\n")).not.toContain("ghp_fake_secret");
   });
 });

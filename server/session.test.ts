@@ -40,7 +40,7 @@ describe("session cookies", () => {
     const session: Session = {
       id: "session-id",
       token: "gho_token",
-      login: "jskoiz",
+      login: "buluma",
       issuedAt: now,
     }
 
@@ -51,7 +51,7 @@ describe("session cookies", () => {
 
   it("returns null for tampered cookie values", () => {
     const key = createKey()
-    const value = sealSession({ id: "session-id", token: "gho_token", login: "jskoiz", issuedAt: Date.now() }, key)
+    const value = sealSession({ id: "session-id", token: "gho_token", login: "buluma", issuedAt: Date.now() }, key)
     const raw = Buffer.from(value, "base64url")
     raw[raw.length - 1] ^= 1
 
@@ -71,19 +71,19 @@ describe("session cookies", () => {
 
     expect(openSession(sealPlaintext(JSON.stringify({
       token: "gho_token",
-      login: "jskoiz",
+      login: "buluma",
       issuedAt,
     }), key), key)).toBeNull()
     expect(openSession(sealPlaintext(JSON.stringify({
       id: 123,
       token: "gho_token",
-      login: "jskoiz",
+      login: "buluma",
       issuedAt,
     }), key), key)).toBeNull()
     expect(openSession(sealPlaintext(JSON.stringify({
       id: "session-id",
       token: 123,
-      login: "jskoiz",
+      login: "buluma",
       issuedAt,
     }), key), key)).toBeNull()
     expect(openSession(sealPlaintext(JSON.stringify({
@@ -95,7 +95,7 @@ describe("session cookies", () => {
     expect(openSession(sealPlaintext(JSON.stringify({
       id: "session-id",
       token: "gho_token",
-      login: "jskoiz",
+      login: "buluma",
       issuedAt: "2026-06-11T12:00:00Z",
     }), key), key)).toBeNull()
   })
@@ -109,7 +109,7 @@ describe("session cookies", () => {
     const value = sealSession({
       id: "session-id",
       token: "gho_token",
-      login: "jskoiz",
+      login: "buluma",
       issuedAt: now - SESSION_MAX_AGE_MS - 1,
     }, key)
 

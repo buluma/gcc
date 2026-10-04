@@ -8,7 +8,7 @@ import {
 } from "./dashboard-cache"
 
 const CACHE_KEY = "github-command-center:dashboard-cache:v4:session"
-const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v4:public:jskoiz"
+const PUBLIC_CACHE_KEY = "github-command-center:dashboard-cache:v4:public:buluma"
 
 function createStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial))
@@ -31,10 +31,10 @@ function createPayload(overrides: Partial<DashboardPayload> = {}): DashboardPayl
     detailLevel: "full",
     scanLimit: 24,
     viewer: {
-      login: "jskoiz",
+      login: "buluma",
       name: "saburo",
       avatarUrl: "https://example.com/avatar.png",
-      profileUrl: "https://github.com/jskoiz",
+      profileUrl: "https://github.com/buluma",
     },
     repos: [],
     recentCommits: [],
@@ -147,15 +147,15 @@ describe("dashboard cache", () => {
     const publicPayload = createPayload({
       viewer: {
         ...payload.viewer,
-        name: "public jskoiz",
+        name: "public buluma",
       },
     })
     const storage = createStorage()
 
     writeDashboardCacheToStorage(storage, "session", payload)
-    writeDashboardCacheToStorage(storage, "public:jskoiz", publicPayload)
+    writeDashboardCacheToStorage(storage, "public:buluma", publicPayload)
 
     expect(JSON.parse(storage.values.get(CACHE_KEY) ?? "{}").payload.viewer.name).toBe("saburo")
-    expect(JSON.parse(storage.values.get(PUBLIC_CACHE_KEY) ?? "{}").payload.viewer.name).toBe("public jskoiz")
+    expect(JSON.parse(storage.values.get(PUBLIC_CACHE_KEY) ?? "{}").payload.viewer.name).toBe("public buluma")
   })
 })

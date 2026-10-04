@@ -29,14 +29,14 @@ describe("formatBillingQuantity", () => {
 
 describe("shortRepoName", () => {
   it("removes the signed-in viewer's owner prefix", () => {
-    expect(shortRepoName("jskoiz/github-command-center", "jskoiz")).toBe("github-command-center")
+    expect(shortRepoName("buluma/gcc", "buluma")).toBe("gcc")
   })
 
   it("keeps other owners visible", () => {
-    expect(shortRepoName("octocat/hello-world", "jskoiz")).toBe("octocat/hello-world")
+    expect(shortRepoName("octocat/hello-world", "buluma")).toBe("octocat/hello-world")
   })
 
   it("keeps full names when no viewer is known", () => {
-    expect(shortRepoName("jskoiz/github-command-center", null)).toBe("jskoiz/github-command-center")
+    expect(shortRepoName("buluma/gcc", null)).toBe("buluma/gcc")
   })
 })

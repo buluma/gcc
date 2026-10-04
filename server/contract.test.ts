@@ -149,23 +149,23 @@ const DashboardPayloadSchema: z.ZodType<DashboardPayload> = z.object({
 // Fixture builders for testing
 function createValidViewer(overrides: Partial<Viewer> = {}): Viewer {
   return {
-    login: "jskoiz",
+    login: "buluma",
     name: "saburo",
-    avatarUrl: "https://github.com/jskoiz.png",
-    profileUrl: "https://github.com/jskoiz",
+    avatarUrl: "https://github.com/buluma.png",
+    profileUrl: "https://github.com/buluma",
     ...overrides,
   }
 }
 
 function createValidCommit(overrides: Partial<CommitSummary> = {}): CommitSummary {
   return {
-    repo: "jskoiz/test-repo",
+    repo: "buluma/test-repo",
     sha: "abcdef1234567890abcdef1234567890abcdef12",
     shortSha: "abcdef1",
     message: "Test commit message",
     author: "saburo",
     date: "2026-07-12T12:00:00.000Z",
-    url: "https://github.com/jskoiz/test-repo/commit/abcdef1",
+    url: "https://github.com/buluma/test-repo/commit/abcdef1",
     ...overrides,
   }
 }
@@ -174,13 +174,13 @@ function createValidIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
   return {
     id: 123,
     number: 42,
-    repo: "jskoiz/test-repo",
+    repo: "buluma/test-repo",
     title: "Test issue",
     state: "open",
-    url: "https://github.com/jskoiz/test-repo/issues/42",
+    url: "https://github.com/buluma/test-repo/issues/42",
     updatedAt: "2026-07-12T12:00:00.000Z",
     createdAt: "2026-07-12T11:00:00.000Z",
-    author: "jskoiz",
+    author: "buluma",
     labels: ["bug", "help-wanted"],
     isPullRequest: false,
     isDraft: false,
@@ -191,7 +191,7 @@ function createValidIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
 function createValidWorkflowRun(overrides: Partial<WorkflowRunSummary> = {}): WorkflowRunSummary {
   return {
     id: 999,
-    repo: "jskoiz/test-repo",
+    repo: "buluma/test-repo",
     name: "CI",
     event: "push",
     status: "completed",
@@ -201,7 +201,7 @@ function createValidWorkflowRun(overrides: Partial<WorkflowRunSummary> = {}): Wo
     updatedAt: "2026-07-12T12:05:00.000Z",
     runStartedAt: "2026-07-12T12:01:00.000Z",
     durationSeconds: 240,
-    url: "https://github.com/jskoiz/test-repo/actions/runs/999",
+    url: "https://github.com/buluma/test-repo/actions/runs/999",
     ...overrides,
   }
 }
@@ -210,10 +210,10 @@ function createValidRepo(overrides: Partial<RepoSummary> = {}): RepoSummary {
   return {
     id: 1,
     name: "test-repo",
-    fullName: "jskoiz/test-repo",
-    owner: "jskoiz",
+    fullName: "buluma/test-repo",
+    owner: "buluma",
     description: "A test repository",
-    url: "https://github.com/jskoiz/test-repo",
+    url: "https://github.com/buluma/test-repo",
     language: "TypeScript",
     visibility: "private",
     isPrivate: true,
@@ -252,7 +252,7 @@ function createValidBilling(overrides: Partial<BillingSummary> = {}): BillingSum
       { sku: "Actions Windows", quantity: 100, unitType: "GBh", grossAmount: 20.5, netAmount: 18.5 },
     ],
     repositories: [
-      { repo: "jskoiz/test-repo", quantity: 3000, grossAmount: 50.0, netAmount: 45.0 },
+      { repo: "buluma/test-repo", quantity: 3000, grossAmount: 50.0, netAmount: 45.0 },
     ],
     ...overrides,
   }

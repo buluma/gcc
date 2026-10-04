@@ -18,10 +18,10 @@ describe("parseDashboardRequest", () => {
     })
 
     expect(parseDashboardRequest(
-      new URL("http://localhost/api/dashboard/jskoiz?refresh=1&scanLimit=60"),
+      new URL("http://localhost/api/dashboard/buluma?refresh=1&scanLimit=60"),
       "/api/dashboard"
     )).toEqual({
-      username: "jskoiz",
+      username: "buluma",
       options: { force: true, quick: false, scanLimit: 60 },
     })
   })
@@ -31,8 +31,8 @@ describe("parseDashboardRequest", () => {
       username: null,
       options: { force: false, quick: false, scanLimit: 24 },
     })
-    expect(parseDashboardRequest(new URL("http://localhost/jskoiz?scanLimit=12"), "")).toEqual({
-      username: "jskoiz",
+    expect(parseDashboardRequest(new URL("http://localhost/buluma?scanLimit=12"), "")).toEqual({
+      username: "buluma",
       options: { force: false, quick: false, scanLimit: 12 },
     })
   })

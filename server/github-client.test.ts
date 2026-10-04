@@ -43,7 +43,7 @@ afterEach(() => {
 describe("createTokenExecutor", () => {
   it("sends REST requests with OAuth and GitHub API headers", async () => {
     const fetchMock = installFetchMock()
-    fetchMock.mockResolvedValueOnce(jsonResponse({ login: "jskoiz" }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ login: "buluma" }))
 
     const executor = createTokenExecutor("gho_secret")
     const stdout = await executor([
@@ -62,7 +62,7 @@ describe("createTokenExecutor", () => {
       "User-Agent": "github-command-center",
       "X-GitHub-Api-Version": "2026-03-10",
     })
-    expect(JSON.parse(stdout)).toEqual({ login: "jskoiz" })
+    expect(JSON.parse(stdout)).toEqual({ login: "buluma" })
   })
 
   it("follows paginated REST links and slurps page bodies", async () => {
@@ -133,14 +133,14 @@ describe("createTokenExecutor", () => {
 
     let thrown: unknown
     try {
-      await executor(["api", "/repos/jskoiz/private"], "/repos/jskoiz/private")
+      await executor(["api", "/repos/buluma/private"], "/repos/buluma/private")
     } catch (error) {
       thrown = error
     }
 
     expect(thrown).toMatchObject({
       status: 403,
-      endpoint: "/repos/jskoiz/private",
+      endpoint: "/repos/buluma/private",
     })
     expect(thrown).toBeInstanceOf(Error)
     expect((thrown as Error).message).toContain("GitHub API returned 403")
@@ -163,7 +163,7 @@ describe("createTokenExecutor", () => {
 
     let thrown: unknown
     try {
-      await executor(["api", "/users/jskoiz"], "/users/jskoiz")
+      await executor(["api", "/users/buluma"], "/users/buluma")
     } catch (error) {
       thrown = error
     }
@@ -171,7 +171,7 @@ describe("createTokenExecutor", () => {
     expect(isGithubRateLimitError(thrown)).toBe(true)
     expect(thrown).toMatchObject({
       code: "github_rate_limit",
-      endpoint: "/users/jskoiz",
+      endpoint: "/users/buluma",
       retryAfterSeconds: 60,
       status: 403,
     })
@@ -180,7 +180,7 @@ describe("createTokenExecutor", () => {
 
   it("sends GraphQL queries and typed fields in the POST body", async () => {
     const fetchMock = installFetchMock()
-    fetchMock.mockResolvedValueOnce(jsonResponse({ data: { viewer: { login: "jskoiz" } } }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ data: { viewer: { login: "buluma" } } }))
 
     const query = "query Test($limit: Int!, $includePrivate: Boolean!) { viewer { login } }"
     const executor = createTokenExecutor("gho_secret")
@@ -196,7 +196,7 @@ describe("createTokenExecutor", () => {
       "-F",
       "includePrivate=true",
       "-f",
-      "owner=jskoiz",
+      "owner=buluma",
     ], "graphql")
     const [url, init] = getFetchCall(fetchMock)
 
@@ -210,12 +210,12 @@ describe("createTokenExecutor", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       query,
       variables: {
-        owner: "jskoiz",
+        owner: "buluma",
         limit: 3,
         includePrivate: true,
       },
     })
-    expect(JSON.parse(stdout)).toEqual({ data: { viewer: { login: "jskoiz" } } })
+    expect(JSON.parse(stdout)).toEqual({ data: { viewer: { login: "buluma" } } })
   })
 
   it("throws GraphQL responses with errors and no data", async () => {
@@ -240,10 +240,10 @@ describe("createTokenExecutor", () => {
 describe("createPublicExecutor", () => {
   it("omits Authorization by default for public REST requests", async () => {
     const fetchMock = installFetchMock()
-    fetchMock.mockResolvedValueOnce(jsonResponse({ login: "jskoiz" }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ login: "buluma" }))
 
     const executor = createPublicExecutor()
-    await executor(["api", "/users/jskoiz"], "/users/jskoiz")
+    await executor(["api", "/users/buluma"], "/users/buluma")
     const [, init] = getFetchCall(fetchMock)
 
     expect((init?.headers as Record<string, string>).Authorization).toBeUndefined()
@@ -251,10 +251,10 @@ describe("createPublicExecutor", () => {
 
   it("uses an optional server token for public REST requests", async () => {
     const fetchMock = installFetchMock()
-    fetchMock.mockResolvedValueOnce(jsonResponse({ login: "jskoiz" }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ login: "buluma" }))
 
     const executor = createPublicExecutor("ghp_public_rate_token")
-    await executor(["api", "/users/jskoiz"], "/users/jskoiz")
+    await executor(["api", "/users/buluma"], "/users/buluma")
     const [, init] = getFetchCall(fetchMock)
 
     expect(init?.headers).toMatchObject({
