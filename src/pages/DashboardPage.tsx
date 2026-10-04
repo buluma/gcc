@@ -42,7 +42,7 @@ import {
   type DashboardCacheEntry,
   writeDashboardCache,
 } from "@/lib/dashboard-cache";
-import { createDemoDashboard } from "@/lib/demo-dashboard";
+import { createDemoDashboard, createDemoPullRequestDetail } from "@/lib/demo-dashboard";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -249,6 +249,15 @@ export default function DashboardPage({
   );
   const [needsLogin, setNeedsLogin] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const canMerge = !demoMode && !publicUsername && (authMode === "local" || authMode === "oauth");
+  const demoDetail = useMemo(() => {
+    if (!demoMode || !prDetail || !data) return undefined;
+    const item = data.pullRequests.find((item) =>
+      item.repo === `${prDetail.owner}/${prDetail.repo}` && item.number === prDetail.number,
+    );
+    return item ? createDemoPullRequestDetail(item) : undefined;
+  }, [demoMode, prDetail, data]);
 
   const preferenceScope = demoMode
     ? null
@@ -544,10 +553,11 @@ export default function DashboardPage({
                     <NeedsAttentionCard
                       items={attentionItems}
                       viewerLogin={data.viewer.login}
-                      onOpenPRDetail={handleOpenPRDetail}
+                      onOpenPRDetail={publicUsername ? undefined : handleOpenPRDetail}
                     />
                     <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
                       <FocusView
+                        canMerge={canMerge}
                         repos={view.filteredRepos}
                         scope={repoScope}
                         activeCount={view.activeCount}
@@ -563,7 +573,7 @@ export default function DashboardPage({
                         onScopeChange={handleRepoScopeChange}
                         onSelectRepo={setSelectedRepo}
                         onToggleRepoHidden={toggleRepoHidden}
-                        onOpenPRDetail={handleOpenPRDetail}
+                        onOpenPRDetail={publicUsername ? undefined : handleOpenPRDetail}
                         onMergeComplete={() => void loadDashboard(true)}
                       />
                       <OperationalRail
@@ -585,12 +595,15 @@ export default function DashboardPage({
           ) : null}
         </div>
         <PRDetailsDialog
+          key={prDetail ? `${prDetail.owner}/${prDetail.repo}/${prDetail.number}` : "closed"}
           open={!!prDetail}
           onOpenChange={(open) => !open && setPrDetail(null)}
           owner={prDetail?.owner ?? ""}
           repo={prDetail?.repo ?? ""}
           pullNumber={prDetail?.number ?? 0}
           viewerLogin={data?.viewer.login ?? ""}
+          canMerge={canMerge}
+          demoDetail={demoDetail}
           onMergeComplete={() => void loadDashboard(true)}
         />
       </main>

@@ -72,7 +72,7 @@ describe("App dashboard cache auth", () => {
     render(<App />)
 
     // In demo mode, PR titles are buttons that open the detail dialog, not links
-    await screen.findByText("okgithub")
+    await screen.findByText("okgithub", {}, { timeout: 5000 })
     const pullRequestsRegion = screen.getByRole("region", { name: "Pull Requests" })
     const prButton = within(pullRequestsRegion).getByRole("button", { name: /Make public profile pages the default share target/i })
     const click = new MouseEvent("click", { bubbles: true, cancelable: true })

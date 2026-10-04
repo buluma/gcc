@@ -2,11 +2,13 @@ import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } fro
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import path from "node:path"
+import { createLocalPrHandler } from "./server/local-pr-api"
 import { getGithubDashboard, getPublicGithubDashboard } from "./server/github-dashboard"
 import { DashboardRequestError, parseDashboardRequest } from "./server/dashboard-request"
 import { isLocalDashboardRequest, LOCAL_DASHBOARD_ONLY_MESSAGE } from "./server/local-access"
 
 function installGithubDashboardApi(server: ViteDevServer | PreviewServer) {
+  server.middlewares.use(createLocalPrHandler())
   server.middlewares.use("/api/dashboard", async (req, res, next) => {
     if (req.method !== "GET") {
       next()
@@ -57,22 +59,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  server: {
-    proxy: {
-      "/api/merge-pr": {
-        target: "http://127.0.0.1:3000",
-        changeOrigin: true,
-      },
-      "/api/pr-detail": {
-        target: "http://127.0.0.1:3000",
-        changeOrigin: true,
-      },
-      "/auth": {
-        target: "http://127.0.0.1:3000",
-        changeOrigin: true,
-      },
     },
   },
 })

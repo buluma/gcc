@@ -70,6 +70,7 @@ export function FocusView({
   onToggleRepoHidden,
   onOpenPRDetail,
   onMergeComplete,
+  canMerge,
 }: {
   repos: RepoSummary[];
   scope: RepoScope;
@@ -86,7 +87,8 @@ export function FocusView({
   onScopeChange: (scope: RepoScope) => void;
   onSelectRepo: (fullName: string | null) => void;
   onToggleRepoHidden: (id: number) => void;
-  onOpenPRDetail: (owner: string, repo: string, number: number) => void;
+  onOpenPRDetail?: (owner: string, repo: string, number: number) => void;
+  canMerge: boolean;
   onMergeComplete?: () => void;
 }) {
   const [prState, setPrState] = useState<PullRequestStateFilter>("all");
@@ -164,6 +166,7 @@ export function FocusView({
               viewerLogin={viewerLogin}
               onOpenPRDetail={onOpenPRDetail}
               onMergeComplete={onMergeComplete}
+              canMerge={canMerge}
             />
           ))
         )}
@@ -530,12 +533,14 @@ function FeedIssueRow({
   viewerLogin,
   onOpenPRDetail,
   onMergeComplete,
+  canMerge = false,
 }: {
   item: IssueSummary;
   icon: typeof CircleDotIcon;
   viewerLogin: string;
   onOpenPRDetail?: (owner: string, repo: string, number: number) => void;
   onMergeComplete?: () => void;
+  canMerge?: boolean;
 }) {
   const [isMerging, setIsMerging] = useState(false);
 
@@ -575,7 +580,7 @@ function FeedIssueRow({
   };
 
   const showMergeButton =
-    item.isPullRequest && item.state === "open" && !item.isDraft;
+    canMerge && item.isPullRequest && item.state === "open" && !item.isDraft;
 
   return (
     <div className="group grid grid-cols-[auto_1fr_auto] items-start gap-2 rounded-md px-1.5 py-1.5 outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
@@ -584,13 +589,19 @@ function FeedIssueRow({
         aria-hidden="true"
       />
       <div className="min-w-0">
-        <button
-          type="button"
-          onClick={handleOpenDetail}
-          className="w-full text-left truncate font-medium leading-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-        >
-          <span className="block truncate">{item.title}</span>
-        </button>
+        {item.isPullRequest && onOpenPRDetail ? (
+          <button
+            type="button"
+            onClick={handleOpenDetail}
+            className="w-full text-left truncate font-medium leading-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+          >
+            <span className="block truncate">{item.title}</span>
+          </button>
+        ) : (
+          <a href={item.url} target="_blank" rel="noreferrer" className="block truncate font-medium leading-4 hover:underline">
+            {item.title}
+          </a>
+        )}
         <a
           href={item.url}
           target="_blank"

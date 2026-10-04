@@ -68,7 +68,7 @@ type TestResponse = {
 type Fixture = {
   calls: FixtureCalls
   logger: FixtureLogger
-  request(path: string, options?: { method?: string; headers?: Record<string, string> }): Promise<TestResponse>
+  request(path: string, options?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<TestResponse>
   sessionKey: Buffer
   close(): Promise<void>
 }
@@ -195,7 +195,7 @@ async function withFixture(
 function request(
   server: Server,
   path: string,
-  options: { method?: string; headers?: Record<string, string> } = {}
+  options: { method?: string; headers?: Record<string, string>; body?: string } = {}
 ): Promise<TestResponse> {
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("Test server is not listening on TCP.")
@@ -223,7 +223,7 @@ function request(
       })
     })
     req.on("error", reject)
-    req.end()
+    req.end(options.body)
   })
 }
 
@@ -1115,3 +1115,52 @@ describe("hosted request handler", () => {
     }, { rateLimiters })
   })
 })
+
+
+describe("PR merge endpoint", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("rejects invalid JSON values and fields before calling GitHub", async () => {
+    const upstream = vi.fn();
+    vi.stubGlobal("fetch", upstream);
+    await withFixture(async (fixture) => {
+      const headers = { Cookie: sessionCookieHeader(fixture.sessionKey), "Content-Type": "application/json" };
+      for (const body of ["null", "[]", "false", "{", JSON.stringify({ owner: {}, repo: "app", pullNumber: 1 }),
+        JSON.stringify({ owner: "me", repo: "../app", pullNumber: 1 }),
+        JSON.stringify({ owner: "me", repo: "app", pullNumber: "1" }),
+        JSON.stringify({ owner: "me", repo: "app", pullNumber: 1.5 }),
+        JSON.stringify({ owner: "me", repo: "app", pullNumber: 1, mergeMethod: "delete" })]) {
+        const response = await fixture.request("/api/merge-pr", { method: "POST", headers, body });
+        expect(response.status).toBe(400);
+      }
+      expect(upstream).not.toHaveBeenCalled();
+    }, { rateLimiters: testRateLimiters() });
+  });
+
+  it("caps request bodies by bytes and rejects same-site mutations", async () => {
+    const upstream = vi.fn();
+    vi.stubGlobal("fetch", upstream);
+    await withFixture(async (fixture) => {
+      const headers = { Cookie: sessionCookieHeader(fixture.sessionKey) };
+      expect((await fixture.request("/api/merge-pr", { method: "POST", headers, body: "x".repeat(4097) })).status).toBe(413);
+      expect((await fixture.request("/api/merge-pr", { method: "POST", headers: { ...headers, "Sec-Fetch-Site": "same-site" }, body: "{}" })).status).toBe(403);
+      expect(upstream).not.toHaveBeenCalled();
+    });
+  });
+
+  it("preserves OAuth authentication and the default squash merge", async () => {
+    const upstream = vi.fn().mockResolvedValue(new Response(JSON.stringify({ merged: true, message: "Merged", sha: "abc" }), { status: 200 }));
+    vi.stubGlobal("fetch", upstream);
+    await withFixture(async (fixture) => {
+      const body = JSON.stringify({ owner: "me", repo: "app", pullNumber: 1 });
+      expect((await fixture.request("/api/merge-pr", { method: "POST", body })).status).toBe(401);
+      const response = await fixture.request("/api/merge-pr", { method: "POST", body,
+        headers: { Cookie: sessionCookieHeader(fixture.sessionKey), "Sec-Fetch-Site": "same-origin" } });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body).merged).toBe(true);
+      expect(upstream.mock.calls[0][0]).toBe("https://api.github.com/repos/me/app/pulls/1/merge");
+      expect(JSON.parse(upstream.mock.calls[0][1].body).merge_method).toBe("squash");
+      expect(upstream.mock.calls[0][1].headers.Authorization).toBe("Bearer gho_token");
+    });
+  });
+});

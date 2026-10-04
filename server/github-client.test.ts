@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
+  fetchPullRequestDetail,
   createPublicExecutor,
   createTokenExecutor,
   isGithubRateLimitError,
@@ -321,3 +322,47 @@ describe("revokeOAuthToken", () => {
     expect((thrown as Error).message).not.toContain(token)
   })
 })
+
+
+function rawPullRequest() {
+  return {
+    databaseId: 12345, number: 12, title: "Add feature", state: "OPEN", url: "https://github.com/me/app/pull/12",
+    updatedAt: "2026-10-04T00:00:00Z", createdAt: "2026-09-01T00:00:00Z", author: { login: "me" },
+    labels: { nodes: [] }, isDraft: false, baseRefName: "main", headRefName: "feature",
+    baseRepository: null, headRepository: null, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
+    reviewDecision: "APPROVED", statusCheckRollup: { state: "SUCCESS" }, additions: 10, deletions: 2,
+    changedFiles: 1, commits: { totalCount: 1 }, body: null,
+    files: { totalCount: 1, nodes: [{ path: "src/index.ts", additions: 10, deletions: 2 }] },
+    reviewRequests: { totalCount: 0, nodes: [] as Array<{ requestedReviewer: { __typename: string; id?: string; name?: string; login?: string } }> },
+  };
+}
+
+describe("PR detail contract", () => {
+  it("uses the numeric database ID and avoids membership requests without teams", async () => {
+    const upstream = installFetchMock();
+    upstream.mockResolvedValueOnce(jsonResponse({ data: { repository: { pullRequest: rawPullRequest() } } }));
+    const result = await fetchPullRequestDetail({ token: "test", owner: "me", repo: "app", pullNumber: 12 });
+    expect(result.id).toBe(12345);
+    expect(result.reviewRequestsTruncated).toBe(false);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it("checks actual viewer team membership by node ID across bounded pages", async () => {
+    const upstream = installFetchMock();
+    const pr = rawPullRequest();
+    pr.reviewRequests = { totalCount: 101, nodes: [
+      { requestedReviewer: { __typename: "Team", id: "TEAM_MEMBER", name: "Platform" } },
+      { requestedReviewer: { __typename: "Team", id: "TEAM_OTHER", name: "Platform" } },
+      { requestedReviewer: { __typename: "User", login: "me" } },
+    ] };
+    upstream.mockResolvedValueOnce(jsonResponse({ data: { repository: { pullRequest: pr } } }))
+      .mockResolvedValueOnce(jsonResponse([], { headers: { Link: '<https://api.github.com/user/teams?page=2>; rel="next"' } }))
+      .mockResolvedValueOnce(jsonResponse([{ node_id: "TEAM_MEMBER" }]));
+    const result = await fetchPullRequestDetail({ token: "test", owner: "me", repo: "app", pullNumber: 12 });
+    expect(result.reviewRequestedTeams).toEqual([
+      { name: "Platform", viewerIsMember: true }, { name: "Platform", viewerIsMember: false },
+    ]);
+    expect(result.reviewRequestedLogins).toEqual(["me"]);
+    expect(result.reviewRequestsTruncated).toBe(true);
+  });
+});

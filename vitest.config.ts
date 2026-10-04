@@ -4,6 +4,8 @@ import path from "node:path"
 
 export default defineConfig({
   test: {
+    // Bound jsdom processes so cold lazy imports do not starve DOM assertions.
+    maxWorkers: 4,
     projects: [
       {
         plugins: [react()],

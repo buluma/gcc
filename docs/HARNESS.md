@@ -7,21 +7,21 @@ the Docker image uses the same version.
 
 ```sh
 nvm use
-npm ci
+bun install --frozen-lockfile
 ```
 
-`npm ci` is the deterministic install path. Use `npm install` only when
-intentionally changing dependency metadata and commit both package files.
+`bun install --frozen-lockfile` is the deterministic install path. Use `bun install` only when
+intentionally changing dependency metadata and commit `package.json` and `bun.lock`.
 
 ## Fast feedback
 
 ```sh
-npm run lint
-npm run dead-code
-npm run typecheck
-npm run test -- --project web
-npm run test -- --project server
-npm run test -- src/App.test.tsx
+bun run lint
+bun run dead-code
+bun run typecheck
+bun run test -- --project web
+bun run test -- --project server
+bun run test -- src/App.test.tsx
 ```
 
 The web project runs in jsdom and loads `src/test/setup.ts`. The server project
@@ -31,7 +31,7 @@ OAuth, billing, or deployment surfaces.
 ## Required local gate
 
 ```sh
-npm run check
+bun run check
 ```
 
 The gate runs lint, Knip, both test projects, typechecking, both standalone and
@@ -40,7 +40,8 @@ dry-run. The smoke script
 starts the built standalone server on a temporary loopback port, requires
 `{ "ok": true }` from `/healthz`, and terminates the child process. The Wrangler
 step bundles the Cloudflare entry point and validates its asset/config contract
-without uploading. A passing gate should not leave a server running or modify
+without uploading. The dependency audit rejects high or critical advisories.
+A passing gate should not leave a server running or modify
 tracked files.
 
 ## Worker runtime and deployment
@@ -48,22 +49,22 @@ tracked files.
 Run the Cloudflare runtime locally after building:
 
 ```sh
-npm run build
-npx wrangler dev --local --port 8787
+bun run build
+bunx wrangler dev --local --port 8787
 curl --fail http://127.0.0.1:8787/healthz
 curl --fail 'http://127.0.0.1:8787/api/dashboard/jskoiz?quick=1&scanLimit=8'
 ```
 
-Deploy only after `npm run check` passes:
+Deploy only after `bun run check` passes:
 
 ```sh
-npm run deploy
+bun run deploy
 curl --fail https://github-command-center.jskoiz.workers.dev/healthz
 curl --fail 'https://github-command-center.jskoiz.workers.dev/api/dashboard/jskoiz?quick=1&scanLimit=8'
-npx wrangler deployments list
+bunx wrangler deployments list
 ```
 
-`npm run deploy` runs the public-only Worker build before upload. The first two
+`bun run deploy` runs the public-only Worker build before upload. The first two
 live requests prove the public HTTPS surface; the deployments list
 proves Cloudflare's active version record. A successful upload alone is not live
 proof. Do not place `gh` credentials or OAuth secrets in `wrangler.jsonc`.
@@ -71,10 +72,10 @@ proof. Do not place `gh` credentials or OAuth secrets in `wrangler.jsonc`.
 ## Dependency changes
 
 ```sh
-npm install
-npm audit --audit-level=high
-npm run check
-git diff -- package.json package-lock.json
+bun install
+bun run audit
+bun run check
+git diff -- package.json bun.lock
 ```
 
 Knip is mandatory. Prefer removing dead code over adding ignore entries. The
@@ -87,16 +88,16 @@ that Knip cannot see. Remove an ignore when its corresponding import disappears.
 The automated smoke requires an existing `dist/`:
 
 ```sh
-npm run build
-npm run smoke:hosted
+bun run build
+bun run smoke:hosted
 ```
 
-For manual inspection, `npm start` loads `.env` through Node. Vite does not load
+For manual inspection, `bun run start` loads `.env` through Node. Vite does not load
 unprefixed `.env` values into its Node process, so local overrides must be
 exported in the command shell:
 
 ```sh
-GH_BIN=/absolute/path/to/gh npm run dev
+GH_BIN=/absolute/path/to/gh bun run dev
 ```
 
 ## Container gate
@@ -116,5 +117,5 @@ The curl and Docker health status must both succeed.
 ## Generated artifacts
 
 `dist/`, `.cache/`, `coverage/`, and `node_modules/` are generated. Remove the
-build output with `npm run clean`; do not delete the runtime cache unless the
+build output with `bun run clean`; do not delete the runtime cache unless the
 task explicitly requires resetting local GitHub data.

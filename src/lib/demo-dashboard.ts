@@ -3,6 +3,7 @@ import type {
   CommitSummary,
   DashboardPayload,
   IssueSummary,
+  PullRequestDetailResponse,
   RepoSummary,
   Viewer,
   WorkflowRunSummary,
@@ -723,4 +724,29 @@ function createDemoBilling(): BillingSummary {
 
 function hoursAgo(now: number, hours: number): string {
   return new Date(now - hours * 60 * 60 * 1000).toISOString()
+}
+
+export function createDemoPullRequestDetail(item: IssueSummary): PullRequestDetailResponse {
+  return {
+    ...item,
+    isDraft: Boolean(item.isDraft),
+    baseRef: "main",
+    headRef: "demo-change",
+    baseRepo: null,
+    headRepo: null,
+    mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
+    reviewDecision: "APPROVED",
+    statusCheckRollup: "SUCCESS",
+    additions: 12,
+    deletions: 3,
+    changedFiles: 1,
+    commits: 1,
+    body: "Sample pull request details for the interactive demo.",
+    files: [{ path: "src/example.ts", additions: 12, deletions: 3 }],
+    filesTruncated: false,
+    reviewRequestedLogins: [],
+    reviewRequestedTeams: [],
+    reviewRequestsTruncated: false,
+  };
 }

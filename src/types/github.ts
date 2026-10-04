@@ -134,3 +134,52 @@ export type DashboardPayload = {
   billing: BillingSummary;
   warnings: DashboardWarning[];
 };
+
+type MergeMethod = "merge" | "squash" | "rebase"
+
+export interface MergePullRequestRequest {
+  owner: string
+  repo: string
+  pullNumber: number
+  mergeMethod?: MergeMethod
+}
+
+export interface MergePullRequestResponse {
+  success: boolean
+  merged: boolean
+  message: string
+  sha?: string
+}
+
+export interface PullRequestDetailResponse {
+  id: number
+  number: number
+  repo: string
+  title: string
+  state: string
+  url: string
+  updatedAt: string
+  createdAt: string
+  author: string | null
+  labels: string[]
+  isPullRequest: boolean
+  isDraft: boolean
+  baseRef: string
+  headRef: string
+  baseRepo: { name: string; fullName: string; owner: string } | null
+  headRepo: { name: string; fullName: string; owner: string } | null
+  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null
+  mergeStateStatus: "BEHIND" | "BLOCKED" | "CLEAN" | "DIRTY" | "DRAFT" | "HAS_HOOKS" | "UNKNOWN" | null
+  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null
+  statusCheckRollup: string | null
+  additions: number
+  deletions: number
+  changedFiles: number
+  commits: number
+  body: string | null
+  files: Array<{ path: string; additions: number; deletions: number }>
+  filesTruncated: boolean
+  reviewRequestedLogins: string[]
+  reviewRequestedTeams: Array<{ name: string; viewerIsMember: boolean }>
+  reviewRequestsTruncated: boolean
+}

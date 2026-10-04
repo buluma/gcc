@@ -3,20 +3,21 @@
   "type": "module",
   "packageManager": "bun@1.4.0",
   "scripts": {
-    "build": "npm run typecheck && vite build",
-    "build:worker": "VITE_PUBLIC_DEPLOYMENT=1 npm run build",
-    "check": "npm run lint && npm run dead-code && npm run test && npm run build && npm run smoke:hosted && npm run check:worker",
-    "check:worker": "npm run build:worker && wrangler deploy --dry-run --strict",
+    "build": "bun run typecheck && vite build",
+    "build:worker": "VITE_PUBLIC_DEPLOYMENT=1 bun run build",
+    "check": "bun run lint && bun run dead-code && bun run test && bun run build && bun run smoke:hosted && bun run check:worker && bun run audit",
+    "check:worker": "bun run build:worker && wrangler deploy --dry-run --strict",
     "clean": "rm -rf dist",
     "dead-code": "knip",
-    "deploy": "npm run build:worker && wrangler deploy --strict",
+    "deploy": "bun run build:worker && wrangler deploy --strict",
     "dev": "vite --host 127.0.0.1",
     "lint": "eslint .",
     "preview": "vite preview --host 127.0.0.1",
     "smoke:hosted": "node scripts/smoke-hosted.mjs",
     "start": "node --env-file-if-exists=.env server/main.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit --pretty false && tsc -p tsconfig.node.json --noEmit --pretty false"
+    "typecheck": "tsc -p tsconfig.app.json --noEmit --pretty false && tsc -p tsconfig.node.json --noEmit --pretty false",
+    "audit": "bun audit --audit-level=high"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -55,8 +56,8 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
-    "vitest": "^4.1.8",
-    "wrangler": "^4.110.0",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.147.0",
     "zod": "^4.4.3"
   },
   "license": "MIT",

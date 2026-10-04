@@ -1,3 +1,4 @@
+import { PrRequestError, readMergeRequest } from "./pr-request.ts"
 import {
   isOAuthConfigured,
   oauthUnavailablePayload,
@@ -36,6 +37,12 @@ export async function handleMergePR(
     return
   }
 
+  const fetchSite = req.headers["sec-fetch-site"];
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    sendJson(res, 403, { message: "Merge must be initiated from the dashboard." });
+    return;
+  }
+
   // Rate limit merge requests
   const limit = dependencies.rateLimiters.fullDashboard.check(`merge-pr:${session.login}`)
   if (!limit.allowed) {
@@ -43,28 +50,16 @@ export async function handleMergePR(
     return
   }
 
-  // Read request body
-  let body: string
+  let parsed;
   try {
-    body = await readBody(req)
-  } catch {
-    sendJson(res, 400, { message: "Failed to read request body." })
-    return
+    parsed = await readMergeRequest(req);
+  } catch (error) {
+    sendJson(res, error instanceof PrRequestError ? error.status : 400, {
+      message: error instanceof Error ? error.message : "Invalid merge request.",
+    });
+    return;
   }
-
-  let parsed: { owner: string; repo: string; pullNumber: number; mergeMethod?: "merge" | "squash" | "rebase" }
-  try {
-    parsed = JSON.parse(body)
-  } catch {
-    sendJson(res, 400, { message: "Invalid JSON body." })
-    return
-  }
-
-  const { owner, repo, pullNumber, mergeMethod } = parsed
-  if (!owner || !repo || !pullNumber) {
-    sendJson(res, 400, { message: "Missing required fields: owner, repo, pullNumber." })
-    return
-  }
+  const { owner, repo, pullNumber, mergeMethod } = parsed;
 
   try {
     const { mergePullRequest } = await import("./github-client.ts")
@@ -103,13 +98,4 @@ export async function handleMergePR(
     dependencies.logger.error("Merge PR failed:", error)
     sendJson(res, 500, { message: "Merge failed. Try again shortly." })
   }
-}
-
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    req.on("data", (chunk: Buffer) => chunks.push(chunk))
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
-    req.on("error", reject)
-  })
 }

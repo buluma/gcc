@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   GitBranchIcon,
   GitCommitHorizontalIcon,
@@ -32,7 +32,7 @@ import { computePrIntelligence } from "@/lib/pr-intelligence";
 import type { AttentionScoreSeverity } from "@/lib/attention-score";
 import type { ChangeRisk } from "@/lib/change-intelligence";
 import { cn } from "@/lib/utils";
-import type { PullRequestDetailResponse } from "@/lib/api";
+import type { PullRequestDetailResponse } from "@/types/github";
 
 interface PRDetailsDialogProps {
   open: boolean;
@@ -42,6 +42,8 @@ interface PRDetailsDialogProps {
   pullNumber: number;
   viewerLogin: string;
   onMergeComplete?: () => void;
+  canMerge: boolean;
+  demoDetail?: PullRequestDetailResponse;
 }
 
 export function PRDetailsDialog({
@@ -52,43 +54,46 @@ export function PRDetailsDialog({
   pullNumber,
   viewerLogin,
   onMergeComplete,
+  canMerge,
+  demoDetail,
 }: PRDetailsDialogProps) {
   const [detail, setDetail] = useState<PullRequestDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cancelledRef = useRef(false);
+  const [isMerging, setIsMerging] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (!open) return;
 
-    cancelledRef.current = false;
+    let cancelled = false;
+    const controller = new AbortController();
     /* eslint-disable react-hooks/set-state-in-effect -- legitimate dialog data-fetch pattern */
     setLoading(true);
-    setError(null);
-    setDetail(null);
     setError(null);
     setDetail(null);
 
     const loadDetail = async () => {
       try {
-        const data = await fetchPullRequestDetail(owner, repo, pullNumber);
-        if (!cancelledRef.current) setDetail(data);
+        const data = demoDetail ?? await fetchPullRequestDetail(owner, repo, pullNumber, controller.signal);
+        if (!cancelled) setDetail(data);
       } catch (err) {
-        if (!cancelledRef.current)
+        if (!cancelled)
           setError(
             err instanceof Error ? err.message : "Failed to load PR details",
           );
       } finally {
-        if (!cancelledRef.current) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     loadDetail();
 
     return () => {
-      cancelledRef.current = true;
+      cancelled = true;
+      controller.abort();
     };
-  }, [open, owner, repo, pullNumber]);
+  }, [open, owner, repo, pullNumber, demoDetail, retry]);
 
   if (!open) return null;
 
@@ -145,6 +150,12 @@ export function PRDetailsDialog({
           )}
         </DialogHeader>
 
+        {error && !loading ? (
+          <div className="space-y-3 text-sm">
+            <p role="alert" className="text-destructive">{error}</p>
+            <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>Try again</Button>
+          </div>
+        ) : null}
         {detail && !loading && !error && (
           <>
             <Tabs defaultValue="overview" className="w-full">
@@ -380,17 +391,20 @@ export function PRDetailsDialog({
                   View on GitHub
                 </a>
               </Button>
-              {detail.isMergeable &&
+              {canMerge && detail.mergeable === "MERGEABLE" &&
                 detail.state === "open" &&
                 !detail.isDraft && (
                   <Button
+                    disabled={isMerging}
                     onClick={async () => {
+                      if (isMerging) return;
                       if (
                         !window.confirm(
                           `Merge #${detail.number} (${shortName}) via squash?`,
                         )
                       )
                         return;
+                      setIsMerging(true);
                       try {
                         await mergePullRequest({
                           owner,
@@ -398,16 +412,19 @@ export function PRDetailsDialog({
                           pullNumber: detail.number,
                           mergeMethod: "squash",
                         });
+                        setDetail((current) => current?.id === detail.id ? { ...current, state: "merged" } : current);
                         onMergeComplete?.();
                       } catch (err) {
                         alert(
                           err instanceof Error ? err.message : "Merge failed",
                         );
+                      } finally {
+                        setIsMerging(false);
                       }
                     }}
                   >
                     <GitMergeIcon className="mr-2 size-4" />
-                    Merge (Squash)
+                    {isMerging ? "Merging..." : "Merge (Squash)"}
                   </Button>
                 )}
             </>
@@ -539,6 +556,9 @@ function IntelligenceTab({
             {detail.reviewDecision?.toLowerCase().replace(/_/g, " ") ?? "Pending"}
             {reviewRequestedForViewer ? " · requested from you" : ""}
           </p>
+          {detail.reviewRequestsTruncated ? (
+            <p className="mt-1 text-xs text-muted-foreground">Only the first 100 review requests are shown; your review request may be outside this list.</p>
+          ) : null}
         </div>
       </div>
 

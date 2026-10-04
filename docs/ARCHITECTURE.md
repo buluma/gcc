@@ -32,7 +32,13 @@ Vite build.
   and hosted adapters.
 - `server/github-dashboard.ts` owns aggregation, bounded fanout, caching, and
   partial-data warnings.
-- `server/github-client.ts` owns direct REST and GraphQL execution.
+- `server/github-client.ts` owns direct REST and GraphQL execution, including the
+  shared PR detail and merge operations.
+- `server/local-pr-api.ts` owns loopback-only dev/preview PR routes. It reads the
+  local `gh` credential into server memory and calls the shared operations;
+  it never proxies PR actions to a hosted OAuth server.
+- `server/pr-request.ts` owns shared PR target validation and the 4 KB streaming
+  merge-body limit. Invalid requests are rejected before upstream calls.
 - `server/session.ts` and `server/rate-limit.ts` own their isolated policies.
 
 Browser modules must not import server modules. Server modules may import the
@@ -62,6 +68,13 @@ input once, then call the dashboard service with the canonical option shape.
 - Standalone hosted OAuth tokens live inside encrypted, httpOnly session cookies. Logout
   revokes the local session and attempts upstream token revocation.
 - The public Worker never accepts OAuth sessions or the local `gh` token.
+- Public PRs link to GitHub; demo details are fixture-backed and read-only.
+  Merge controls require a private local or OAuth dashboard. Both merge routes
+  reject browser requests marked same-site or cross-site.
+- Requested teams are matched against the authenticated user's bounded,
+  paginated team list by node ID. PR review-list truncation is explicit.
+- PR dialog effects abort obsolete requests and ignore late responses using
+  cancellation scoped to each effect. Staleness follows `updatedAt`.
 - `TRUST_PROXY` is opt-in. Forwarded client addresses are ignored otherwise.
 - Server secrets are read from the process environment and never exposed through
   Vite client environment variables.

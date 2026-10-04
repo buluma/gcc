@@ -47,3 +47,34 @@ describe("dashboard search", () => {
     expect(within(screen.getByRole("region", { name: "Commits" })).getByText("No recent commits")).toBeTruthy();
   });
 });
+
+it("keeps demo PR details fixture-backed and read-only", async () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    render(<DashboardPage demoMode publicUsername={null} theme="light" onThemeToggle={vi.fn()} />);
+    const title = createDemoDashboard().pullRequests[0].title;
+    const panel = within(screen.getByRole("region", { name: "Pull Requests" }));
+    expect(panel.queryByRole("button", { name: /Merge/ })).toBeNull();
+    fireEvent.click(panel.getByRole("button", { name: title }));
+    await screen.findByRole("heading", { name: new RegExp(title) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Merge (Squash)" })).toBeNull();
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("links public PRs to GitHub without exposing OAuth-only actions", async () => {
+  const payload = createDemoDashboard();
+  const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(payload), {
+    status: 200, headers: { "x-gcc-auth": "public" },
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    render(<DashboardPage demoMode={false} publicUsername={payload.viewer.login} theme="light" onThemeToggle={vi.fn()} />);
+    await screen.findByRole("region", { name: "Pull Requests" });
+    const panel = within(screen.getByRole("region", { name: "Pull Requests" }));
+    expect(panel.getByRole("link", { name: payload.pullRequests[0].title }).getAttribute("href")).toBe(payload.pullRequests[0].url);
+    expect(panel.queryByRole("button", { name: /Merge/ })).toBeNull();
+    expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith("/api/dashboard/"))).toBe(true);
+  } finally { vi.unstubAllGlobals(); }
+});

@@ -43,7 +43,7 @@ export function NeedsAttentionCard({
 }: {
   items: AttentionItem[];
   viewerLogin: string;
-  onOpenPRDetail: (owner: string, repo: string, number: number) => void;
+  onOpenPRDetail?: (owner: string, repo: string, number: number) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const contentId = useId();
@@ -110,7 +110,7 @@ export function NeedsAttentionCard({
                   key={item.id}
                   type="button"
                   onClick={() => {
-                    if (isPr) {
+                    if (isPr && onOpenPRDetail) {
                       const [owner, repo] = item.repo.split("/");
                       onOpenPRDetail(owner, repo, item.number!);
                     } else {

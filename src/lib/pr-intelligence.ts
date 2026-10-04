@@ -9,7 +9,7 @@ import {
   type ChangeProfile,
 } from "@/lib/change-intelligence";
 import { classifyGithubStatus } from "@/lib/github-status";
-import type { PullRequestDetailResponse } from "@/lib/api";
+import type { PullRequestDetailResponse } from "@/types/github";
 
 // Composes the deterministic attention score and change profile for a
 // single pull request's detail view (the "Intelligence" tab). Unlike the
@@ -44,9 +44,9 @@ export function computePrIntelligence(
   const ciFailing = isFailingCheckState(detail.statusCheckRollup);
   const reviewRequestedForViewer =
     detail.reviewRequestedLogins.includes(viewerLogin) ||
-    detail.reviewRequestedTeams.length > 0;
+    detail.reviewRequestedTeams.some((team) => team.viewerIsMember);
 
-  const ageMs = now - Date.parse(detail.createdAt);
+  const ageMs = now - Date.parse(detail.updatedAt);
   const staleOverdueDays =
     !detail.isDraft && detail.state === "open" && ageMs > STALE_OPEN_PR_MS
       ? Math.floor((ageMs - STALE_OPEN_PR_MS) / (24 * 60 * 60 * 1000))

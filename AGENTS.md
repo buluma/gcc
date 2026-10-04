@@ -12,8 +12,8 @@ aliases, compatibility branches, bridge routes, or dual parsers.
 - `server/` is Node code. `server/worker.ts` runs that code through Cloudflare's
   Node compatibility layer; do not introduce browser imports there.
 - `src/types/github.ts` is the shared browser/server data contract.
-- `vite.config.ts` owns the local `gh` middleware used by `npm run dev` and
-  `npm run preview`.
+- `vite.config.ts` owns the local `gh` middleware used by `bun run dev` and
+  `bun run preview`.
 - `server/app-server.ts` wires the shared hosted server. `server/main.ts` owns
   standalone Node startup; `server/worker.ts` owns the public Cloudflare Worker.
 - Public `/username` dashboards must remain usable without OAuth. Private
@@ -24,16 +24,16 @@ aliases, compatibility branches, bridge routes, or dual parsers.
 ## Canonical commands
 
 ```sh
-npm ci
-npm run test -- --project web
-npm run test -- --project server
-npm run check
-npm audit --audit-level=high
+bun install --frozen-lockfile
+bun run test -- --project web
+bun run test -- --project server
+bun run check
+bun run audit
 ```
 
-`npm run check` is the required local gate. It runs lint, dead-code analysis,
+`bun run check` is the required local gate. It runs lint, dead-code analysis,
 both test projects, typechecking, a production build, the standalone `/healthz`
-smoke, and a strict Wrangler dry-run. See `docs/HARNESS.md` for targeted,
+smoke, a strict Wrangler dry-run, and the dependency audit. See `docs/HARNESS.md` for targeted,
 Worker-runtime, container, and live checks.
 
 ## Change rules
@@ -50,7 +50,7 @@ Worker-runtime, container, and live checks.
 
 ## Definition of done
 
-The relevant focused tests pass, `npm run check` passes, runtime or container
+The relevant focused tests pass, `bun run check` passes, runtime or container
 changes pass their smoke test, documentation matches the final behavior, and
 `git status --short` contains only the intended change. A deployment is live
 only after its public HTTPS URL and Cloudflare deployment record are verified.

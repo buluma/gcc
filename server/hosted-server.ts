@@ -1,3 +1,4 @@
+import { parsePullRequestPath, PrRequestError } from "./pr-request.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, normalize, parse, sep } from "node:path";
 
@@ -376,30 +377,14 @@ async function handlePullRequestDetail(
     return;
   }
 
-  // Parse path: /api/pr-detail/:owner/:repo/:number
-  const pathParts = url.pathname.split("/").filter(Boolean);
-  if (
-    pathParts.length !== 5 ||
-    pathParts[0] !== "api" ||
-    pathParts[1] !== "pr-detail"
-  ) {
-    sendJson(res, 400, {
-      message:
-        "Invalid PR detail path. Expected /api/pr-detail/:owner/:repo/:number",
-    });
+  let target;
+  try {
+    target = parsePullRequestPath(url.pathname);
+  } catch (error) {
+    sendJson(res, error instanceof PrRequestError ? error.status : 400, { message: "Invalid pull request path." });
     return;
   }
-
-  const owner = pathParts[2];
-  const repo = pathParts[3];
-  const pullNumber = Number(pathParts[4]);
-
-  if (!owner || !repo || !Number.isFinite(pullNumber)) {
-    sendJson(res, 400, {
-      message: "Missing required path parameters: owner, repo, pullNumber",
-    });
-    return;
-  }
+  const { owner, repo, pullNumber } = target;
 
   try {
     const { fetchPullRequestDetail } = await import("./github-client.ts");
@@ -758,7 +743,7 @@ async function serveStatic(
         await dependencies.stat(filePath);
       } catch {
         sendJson(res, 404, {
-          message: "Not found. Run `npm run build` before starting the server.",
+          message: "Not found. Run `bun run build` before starting the server.",
         });
         return;
       }
@@ -776,7 +761,7 @@ async function serveStatic(
     res.end(body);
   } catch {
     sendJson(res, 404, {
-      message: "Not found. Run `npm run build` before starting the server.",
+      message: "Not found. Run `bun run build` before starting the server.",
     });
   }
 }

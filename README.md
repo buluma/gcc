@@ -15,6 +15,14 @@ runs (including Needs Attention and Activity). Match repository names, titles or
 messages, authors, PR/issue numbers, labels, commit SHAs, or workflow names and
 branches. Search does not fetch older GitHub history.
 
+PR details and squash merges use the same authenticated identity as the private
+dashboard: local `gh` credentials in dev/preview, or your hosted OAuth session.
+Local PR actions do not require a second server. Public PR titles open GitHub;
+the demo opens sample details without API calls. Public and demo views do not
+offer merge controls. PR detail failures display their message and a retry
+button. Review requests count as yours only when you are directly requested or
+belong to a requested team; stale scores use the last update time.
+
 ## Runtime modes
 
 | Mode | Authentication | Best for |
@@ -28,14 +36,14 @@ same runtime.
 
 ## Local development
 
-Requirements: Node.js 24.18.0, npm, and an authenticated GitHub CLI.
+Requirements: Node.js 24.18.0, Bun 1.4.0, and an authenticated GitHub CLI.
 
 ```sh
 nvm use
 gh auth status
-gh auth refresh -h github.com -s user # required for Actions billing
-npm ci
-npm run dev
+gh auth refresh -h github.com -s user,read:org # billing and PR team reviewers
+bun install --frozen-lockfile
+bun run dev
 ```
 
 Open [the landing page](http://127.0.0.1:5173),
@@ -46,7 +54,7 @@ The local API accepts loopback requests only. Vite does not load unprefixed
 `.env` values into its Node process; pass local overrides in the command shell:
 
 ```sh
-GH_BIN=/absolute/path/to/gh npm run dev
+GH_BIN=/absolute/path/to/gh bun run dev
 ```
 
 ## Hosted modes
@@ -60,13 +68,13 @@ Build, verify, and deploy the public Worker:
 
 ```sh
 nvm use
-npm ci
-npm run check
-npm run deploy
+bun install --frozen-lockfile
+bun run check
+bun run deploy
 curl --fail https://github-command-center.jskoiz.workers.dev/healthz
 ```
 
-`wrangler.jsonc` is the deployment source of truth. `npm run build:worker`
+`wrangler.jsonc` is the deployment source of truth. `bun run build:worker`
 produces public-only homepage copy, `server/worker.ts` routes dynamic requests
 through the shared Node HTTP server, and Cloudflare serves the Vite build with
 the headers in `public/_headers`.
@@ -92,7 +100,7 @@ GITHUB_CLIENT_SECRET=...
 SESSION_SECRET=... # openssl rand -hex 32
 ```
 
-`npm start` loads `.env` when it exists. Process environment variables take
+`bun run start` loads `.env` when it exists. Process environment variables take
 precedence. OAuth deployments must use HTTPS; hosted tokens are stored in an
 encrypted, httpOnly cookie. Do not add OAuth secrets to `wrangler.jsonc`; the
 public Worker does not accept OAuth sessions.
@@ -100,9 +108,9 @@ public Worker does not accept OAuth sessions.
 Build and start:
 
 ```sh
-npm ci
-npm run build
-npm start
+bun install --frozen-lockfile
+bun run build
+bun run start
 curl --fail http://127.0.0.1:3000/healthz
 ```
 
@@ -125,8 +133,8 @@ and health-checks `/healthz`.
 ## Verify
 
 ```sh
-npm run check
-npm audit --audit-level=high
+bun run check
+bun run audit
 ```
 
 The required gate runs lint, dead-code analysis, browser and server tests in

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { computePrIntelligence } from "./pr-intelligence";
-import type { PullRequestDetailResponse } from "@/lib/api";
+import type { PullRequestDetailResponse } from "@/types/github";
 
 const NOW = Date.parse("2026-08-24T12:00:00Z");
 
@@ -32,13 +32,11 @@ function makePr(overrides: Partial<PullRequestDetailResponse> = {}): PullRequest
     changedFiles: 1,
     commits: 1,
     body: null,
-    isMergeable: true,
-    draft: false,
-    mergeableState: "clean",
     files: [{ path: "src/components/Button.tsx", additions: 10, deletions: 5 }],
     filesTruncated: false,
     reviewRequestedLogins: [],
     reviewRequestedTeams: [],
+    reviewRequestsTruncated: false,
     ...overrides,
   };
 }
@@ -63,7 +61,7 @@ describe("computePrIntelligence", () => {
 
   it("flags reviewRequestedForViewer when a team (not the viewer directly) was requested", () => {
     const result = computePrIntelligence(
-      makePr({ reviewRequestedTeams: ["platform"] }),
+      makePr({ reviewRequestedTeams: [{ name: "platform", viewerIsMember: true }] }),
       "me",
       NOW,
     );
@@ -116,10 +114,23 @@ describe("computePrIntelligence", () => {
 
   it("flags staleness for an old open PR", () => {
     const result = computePrIntelligence(
-      makePr({ createdAt: "2026-08-01T00:00:00Z" }),
+      makePr({ updatedAt: "2026-08-01T00:00:00Z" }),
       "me",
       NOW,
     );
     expect(result.attention.reasons.some((r) => r.startsWith("Stale"))).toBe(true);
   });
+  it("does not count a request to another team as a request to the viewer", () => {
+    const result = computePrIntelligence(makePr({
+      reviewRequestedTeams: [{ name: "other-team", viewerIsMember: false }],
+    }), "me", NOW);
+    expect(result.reviewRequestedForViewer).toBe(false);
+  });
+
+  it("uses recent updates rather than creation time for stale and activity signals", () => {
+    const result = computePrIntelligence(makePr({ createdAt: "2026-08-01T00:00:00Z" }), "me", NOW);
+    expect(result.attention.reasons.some((r) => r.startsWith("Stale"))).toBe(false);
+    expect(result.attention.reasons).toContain("Recently updated");
+  });
+
 });

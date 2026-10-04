@@ -1,3 +1,5 @@
+import type { PullRequestDetailResponse } from "../src/types/github.ts"
+
 const GITHUB_API_BASE = "https://api.github.com"
 const REQUEST_TIMEOUT_MS = 30_000
 const MAX_PAGINATED_PAGES = 10
@@ -398,47 +400,14 @@ export async function fetchPullRequestDetail(options: {
   owner: string
   repo: string
   pullNumber: number
-}): Promise<{
-  id: number
-  number: number
-  repo: string
-  title: string
-  state: string
-  url: string
-  updatedAt: string
-  createdAt: string
-  author: string | null
-  labels: string[]
-  isPullRequest: boolean
-  isDraft: boolean
-  baseRef: string
-  headRef: string
-  baseRepo: { name: string; fullName: string; owner: string } | null
-  headRepo: { name: string; fullName: string; owner: string } | null
-  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null
-  mergeStateStatus: "BEHIND" | "BLOCKED" | "CLEAN" | "DIRTY" | "DRAFT" | "HAS_HOOKS" | "UNKNOWN" | null
-  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null
-  statusCheckRollup: string | null
-  additions: number
-  deletions: number
-  changedFiles: number
-  commits: number
-  body: string | null
-  isMergeable: boolean
-  draft: boolean
-  mergeableState: string | null
-  files: Array<{ path: string; additions: number; deletions: number }>
-  filesTruncated: boolean
-  reviewRequestedLogins: string[]
-  reviewRequestedTeams: string[]
-}> {
+}): Promise<PullRequestDetailResponse> {
   const { owner, repo, pullNumber, token } = options
   
   // Use GraphQL to get rich PR detail in one call
   const query = `query($owner: String!, $repo: String!, $number: Int!) {
     repository(owner: $owner, name: $repo) {
       pullRequest(number: $number) {
-        id
+        databaseId
         number
         title
         state
@@ -491,7 +460,8 @@ export async function fetchPullRequestDetail(options: {
             deletions
           }
         }
-        reviewRequests(first: 25) {
+        reviewRequests(first: 100) {
+          totalCount
           nodes {
             requestedReviewer {
               __typename
@@ -499,6 +469,7 @@ export async function fetchPullRequestDetail(options: {
                 login
               }
               ... on Team {
+                id
                 name
               }
             }
@@ -527,7 +498,7 @@ export async function fetchPullRequestDetail(options: {
     data?: {
       repository?: {
         pullRequest?: {
-          id: string
+          databaseId: number
           number: number
           title: string
           state: string
@@ -555,11 +526,15 @@ export async function fetchPullRequestDetail(options: {
             nodes: { path: string; additions: number; deletions: number }[]
           } | null
           reviewRequests: {
+            totalCount: number
             nodes: {
               requestedReviewer: {
-                __typename: string
-                login?: string
-                name?: string
+                __typename: "User"
+                login: string
+              } | {
+                __typename: "Team"
+                id: string
+                name: string
               } | null
             }[]
           } | null
@@ -584,10 +559,22 @@ export async function fetchPullRequestDetail(options: {
     throw createApiError("Pull request not found", `GET /repos/${owner}/${repo}/pulls/${pullNumber}`, 404)
   }
 
+  const requestedTeams = (pr.reviewRequests?.nodes ?? [])
+    .map((node) => node.requestedReviewer)
+    .filter((reviewer) => reviewer?.__typename === "Team");
+  const memberTeamIds = new Set<string>();
+  if (requestedTeams.length > 0) {
+    const stdout = await createTokenExecutor(token)(
+      ["api", "/user/teams?per_page=100", "--paginate", "--slurp"],
+      "GET /user/teams",
+    );
+    const pages = JSON.parse(stdout) as Array<Array<{ node_id: string }>>;
+    for (const team of pages.flat()) memberTeamIds.add(team.node_id);
+  }
   const repoFullName = `${owner}/${repo}`
 
   return {
-    id: Number(pr.id.split("\"")[1]) || pr.number,
+    id: pr.databaseId,
     number: pr.number,
     repo: repoFullName,
     title: pr.title,
@@ -620,9 +607,6 @@ export async function fetchPullRequestDetail(options: {
     changedFiles: pr.changedFiles,
     commits: pr.commits.totalCount,
     body: pr.body,
-    isMergeable: pr.mergeable === "MERGEABLE",
-    draft: pr.isDraft,
-    mergeableState: pr.mergeable,
     files: (pr.files?.nodes ?? []).map((file) => ({
       path: file.path,
       additions: file.additions,
@@ -636,12 +620,10 @@ export async function fetchPullRequestDetail(options: {
           : null,
       )
       .filter((login): login is string => login !== null),
-    reviewRequestedTeams: (pr.reviewRequests?.nodes ?? [])
-      .map((node) =>
-        node.requestedReviewer?.__typename === "Team"
-          ? (node.requestedReviewer.name ?? null)
-          : null,
-      )
-      .filter((name): name is string => name !== null),
+    reviewRequestedTeams: requestedTeams.map((team) => ({
+      name: team.name,
+      viewerIsMember: memberTeamIds.has(team.id),
+    })),
+    reviewRequestsTruncated: (pr.reviewRequests?.totalCount ?? 0) > (pr.reviewRequests?.nodes.length ?? 0),
   }
 }

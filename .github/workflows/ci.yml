@@ -1,5 +1,4 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+# Run the same required gate as local development on the supported Node runtime.
 
 name: CI
 
@@ -19,22 +18,15 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [22.x, 24.x, 26.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
     steps:
     - uses: actions/checkout@v7
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Use the supported Node.js runtime
       uses: actions/setup-node@v7
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version-file: .nvmrc
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
       with:
         bun-version: 1.4.0
     - run: bun install --frozen-lockfile
-    - run: bun run lint
-    - run: bun run build
-    - run: bun run test
+    - run: bun run check
