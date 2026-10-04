@@ -27,7 +27,7 @@ import {
 import { handleMergePR } from "./merge-pr-handler.ts";
 import { getRandomBytes } from "./crypto.ts";
 
-export const OAUTH_SCOPES = "repo user";
+export const OAUTH_SCOPES = "repo user read:org";
 export const SESSION_COOKIE = "gcc_session";
 export const STATE_COOKIE = "gcc_oauth_state";
 export const SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;

@@ -56,6 +56,9 @@ input once, then call the dashboard service with the canonical option shape.
 - Local dashboard APIs accept loopback requests only.
 - Public profile requests use only an explicit `GITHUB_PUBLIC_TOKEN` or GitHub's
   anonymous quota; they never reuse local CLI or OAuth credentials.
+- Standalone hosted OAuth requests `repo user read:org` (team reviewer metadata
+  requires `read:org`). Existing sessions must reauthorize after scope changes;
+  `GITHUB_PUBLIC_TOKEN` never replaces their user token.
 - Standalone hosted OAuth tokens live inside encrypted, httpOnly session cookies. Logout
   revokes the local session and attempts upstream token revocation.
 - The public Worker never accepts OAuth sessions or the local `gh` token.

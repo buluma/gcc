@@ -463,6 +463,7 @@ describe("hosted request handler", () => {
       expect(authorize.searchParams.get("client_id")).toBe("client-id")
       expect(authorize.searchParams.get("redirect_uri")).toBe(`${BASE_URL}/auth/callback`)
       expect(authorize.searchParams.get("scope")).toBe(OAUTH_SCOPES)
+      expect(authorize.searchParams.get("scope")?.split(" ")).toContain("read:org")
       expect(authorize.searchParams.get("state")).toBe(stateCookie)
       expect(response.setCookies[0]).toContain("Max-Age=600")
     })

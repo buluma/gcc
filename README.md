@@ -74,6 +74,11 @@ the headers in `public/_headers`.
 The standalone Node server supports optional OAuth. Set `GITHUB_PUBLIC_TOKEN`
 to raise GitHub's anonymous quota without exposing the token to visitors.
 
+OAuth requests `repo user read:org`; `read:org` is required for team reviewers
+in PR details. After a scope change, sign out and sign back in to authorize a
+new session. Changing `GITHUB_PUBLIC_TOKEN` does not replace the OAuth token
+stored in an existing browser session.
+
 OAuth is optional. It enables `/dashboard`, private repository metadata,
 GraphQL-only rollups, workflow runs, and Actions billing. Create a GitHub OAuth
 App with `${BASE_URL}/auth/callback` as its callback URL, then configure:
