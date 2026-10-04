@@ -9,6 +9,28 @@ describe("NeedsAttentionCard", () => {
     cleanup();
   });
 
+  it("toggles the attention list while keeping counts visible", () => {
+    render(
+      <NeedsAttentionCard items={makeItems(6)} viewerLogin="me" onOpenPRDetail={vi.fn()} />,
+    );
+    const toggle = screen.getByRole("button", { name: "Needs Attention" });
+    const content = document.getElementById(toggle.getAttribute("aria-controls")!);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(content?.hidden).toBe(false);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(content?.hidden).toBe(true);
+    expect(screen.getByText("6 critical")).toBeTruthy();
+    expect(screen.getByText("6")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show 2 more" })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(content?.hidden).toBe(false);
+    expect(screen.getByRole("button", { name: "Show 2 more" })).toBeTruthy();
+  });
+
   it("shows an empty state when nothing needs attention", () => {
     render(
       <NeedsAttentionCard items={[]} viewerLogin="me" onOpenPRDetail={vi.fn()} />,

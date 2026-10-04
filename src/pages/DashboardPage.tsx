@@ -670,6 +670,13 @@ function deriveDashboardView(
   );
   const visibleRepos = data.repos.filter((repo) => !hiddenRepoIds.has(repo.id));
   const normalizedQuery = filters.query.trim().toLowerCase();
+  const matchesQuery = (...values: (string | number | null | undefined)[]) =>
+    !normalizedQuery ||
+    values.some((value) =>
+      value != null && String(value).toLowerCase().includes(normalizedQuery),
+    );
+  const matchesIssueQuery = (item: DashboardPayload["issues"][number]) =>
+    matchesQuery(item.repo, item.title, item.author, `#${item.number}`, ...item.labels);
   const scopedRepos =
     filters.repoScope === "hidden"
       ? data.repos.filter((repo) => hiddenRepoIds.has(repo.id))
@@ -677,12 +684,7 @@ function deriveDashboardView(
         ? visibleRepos.filter(isActiveRepo)
         : visibleRepos;
   const filteredRepos = scopedRepos
-    .filter((repo) => {
-      if (!normalizedQuery) return true;
-      return [repo.fullName, repo.description, repo.language]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(normalizedQuery));
-    })
+    .filter((repo) => matchesQuery(repo.fullName, repo.description, repo.language))
     .filter(
       (repo) =>
         filters.visibility === "all" || repo.visibility === filters.visibility,
@@ -703,15 +705,22 @@ function deriveDashboardView(
     hiddenRepoNames,
     visibleActivity: {
       commits: data.recentCommits.filter(
-        (commit) => !hiddenRepoNames.has(commit.repo),
+        (commit) =>
+          !hiddenRepoNames.has(commit.repo) &&
+          matchesQuery(commit.repo, commit.message, commit.author, commit.sha, commit.shortSha),
       ),
       pullRequests: data.pullRequests.filter(
-        (item) => !hiddenRepoNames.has(item.repo),
+        (item) => !hiddenRepoNames.has(item.repo) && matchesIssueQuery(item),
       ),
-      issues: data.issues.filter((item) => !hiddenRepoNames.has(item.repo)),
+      issues: data.issues.filter(
+        (item) => !hiddenRepoNames.has(item.repo) && matchesIssueQuery(item),
+      ),
     },
     visibleRepos,
-    visibleRuns: data.ciRuns.filter((run) => !hiddenRepoNames.has(run.repo)),
+    visibleRuns: data.ciRuns.filter(
+      (run) => !hiddenRepoNames.has(run.repo) &&
+        matchesQuery(run.repo, run.name, run.branch, run.status, run.conclusion),
+    ),
   };
 }
 
@@ -783,8 +792,8 @@ function Header({
                   onQueryChange("");
                 }
               }}
-              placeholder="Search repositories..."
-              aria-label="Search repositories"
+              placeholder="Search dashboard..."
+              aria-label="Search dashboard"
               className="h-8 bg-card pl-8 pr-8"
             />
             {query ? (

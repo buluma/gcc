@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   AlertTriangleIcon,
+  ChevronDownIcon,
   CircleDotIcon,
   ClockIcon,
   GitPullRequestIcon,
@@ -44,6 +45,8 @@ export function NeedsAttentionCard({
   viewerLogin: string;
   onOpenPRDetail: (owner: string, repo: string, number: number) => void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const contentId = useId();
   const [expanded, setExpanded] = useState(false);
   const displayed = expanded ? items : items.slice(0, COLLAPSED_LIMIT);
   const hiddenCount = items.length - displayed.length;
@@ -57,24 +60,42 @@ export function NeedsAttentionCard({
       className="min-h-0 shrink-0 gap-0 rounded-lg py-0 shadow-sm shadow-foreground/[0.02]"
       size="sm"
     >
-      <CardHeader className="min-h-9 items-center border-b px-3 py-1.5 [.border-b]:pb-1.5">
-        <CardTitle className="flex items-center gap-2 text-[13px] font-semibold leading-none">
-          <AlertTriangleIcon
-            className="size-3.5 text-muted-foreground"
+      <CardHeader
+        className={cn(
+          "flex p-0 [.border-b]:pb-0",
+          !collapsed && "border-b",
+        )}
+      >
+        <button
+          type="button"
+          aria-label="Needs Attention"
+          aria-expanded={!collapsed}
+          aria-controls={contentId}
+          onClick={() => setCollapsed((value) => !value)}
+          className="flex min-h-9 w-full items-center justify-between gap-2 rounded-sm px-3 py-1.5 text-left outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40"
+        >
+          <CardTitle className="flex items-center gap-2 text-[13px] font-semibold leading-none">
+            <AlertTriangleIcon
+              className="size-3.5 text-muted-foreground"
+              aria-hidden="true"
+            />
+            Needs Attention
+            <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+              {items.length}
+            </span>
+            {highCount > 0 ? (
+              <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+                {highCount} critical
+              </Badge>
+            ) : null}
+          </CardTitle>
+          <ChevronDownIcon
             aria-hidden="true"
+            className={cn("size-3.5 shrink-0 text-muted-foreground", collapsed && "-rotate-90")}
           />
-          Needs Attention
-          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-            {items.length}
-          </span>
-          {highCount > 0 ? (
-            <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
-              {highCount} critical
-            </Badge>
-          ) : null}
-        </CardTitle>
+        </button>
       </CardHeader>
-      <CardContent className="flex min-h-0 max-h-56 flex-col gap-0.5 overflow-y-auto px-2 py-1.5 text-xs [scrollbar-gutter:stable]">
+      <CardContent id={contentId} hidden={collapsed} className="flex hidden:hidden min-h-0 max-h-56 flex-col gap-0.5 overflow-y-auto px-2 py-1.5 text-xs [scrollbar-gutter:stable]">
         {items.length === 0 ? (
           <div className="rounded-md bg-muted/30 px-2 py-3 text-muted-foreground">
             Nothing needs attention right now.

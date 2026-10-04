@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchPullRequestDetail } from "@/lib/api";
+import { fetchPullRequestDetail, mergePullRequest } from "@/lib/api";
 import { formatRelative, shortRepoName } from "@/lib/format";
 import { computePrIntelligence } from "@/lib/pr-intelligence";
 import type { AttentionScoreSeverity } from "@/lib/attention-score";
@@ -392,7 +392,6 @@ export function PRDetailsDialog({
                       )
                         return;
                       try {
-                        const { mergePullRequest } = await import("@/lib/api");
                         await mergePullRequest({
                           owner,
                           repo,

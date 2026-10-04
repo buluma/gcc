@@ -8,7 +8,12 @@ The public deployment is live at
 
 The root page opens public dashboards at `/username`, a fixture-backed tour at
 `/demo`, or the private dashboard at `/dashboard`. Hidden repositories and
-dismissed workflow failures persist in the browser.
+dismissed workflow failures persist in the browser. Click the Needs Attention
+header to collapse or expand its list; the total and critical counts stay visible.
+Dashboard search filters loaded repositories, PRs, issues, commits, and workflow
+runs (including Needs Attention and Activity). Match repository names, titles or
+messages, authors, PR/issue numbers, labels, commit SHAs, or workflow names and
+branches. Search does not fetch older GitHub history.
 
 ## Runtime modes
 

@@ -25,6 +25,7 @@ import {
   shortRepoName,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { mergePullRequest } from "@/lib/api";
 import type { RepoHealthTier } from "@/lib/attention";
 import type { CommitSummary, IssueSummary, RepoSummary } from "@/types/github";
 import { StatusBadge } from "./StatusBadge";
@@ -558,7 +559,6 @@ function FeedIssueRow({
 
     setIsMerging(true);
     try {
-      const { mergePullRequest } = await import("@/lib/api");
       const [owner, repo] = item.repo.split("/");
       await mergePullRequest({
         owner,
