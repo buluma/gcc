@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased](https://github.com/buluma/gcc/tree/HEAD)
+
+[Full Changelog](https://github.com/buluma/gcc/compare/v0.3.0...HEAD)
+
+**Merged pull requests:**
+
+- Update the project to Bun 1.4.4 [\#24](https://github.com/buluma/gcc/pull/24) ([buluma](https://github.com/buluma))
+
 ## [v0.3.0](https://github.com/buluma/gcc/tree/v0.3.0) (2026-10-04)
 
 [Full Changelog](https://github.com/buluma/gcc/compare/v0.2.0...v0.3.0)
@@ -25,7 +33,6 @@
 
 - ci: add Docker build and push workflow [\#12](https://github.com/buluma/gcc/pull/12) ([buluma](https://github.com/buluma))
 - feat: add PR merge capability [\#11](https://github.com/buluma/gcc/pull/11) ([buluma](https://github.com/buluma))
-- test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
 
 ## [v0.1.0](https://github.com/buluma/gcc/tree/v0.1.0) (2026-08-17)
 
@@ -33,6 +40,7 @@
 
 **Merged pull requests:**
 
+- test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
 - brands [\#9](https://github.com/buluma/gcc/pull/9) ([buluma](https://github.com/buluma))
 - Update ci.yml [\#8](https://github.com/buluma/gcc/pull/8) ([buluma](https://github.com/buluma))
 - fix ci [\#7](https://github.com/buluma/gcc/pull/7) ([buluma](https://github.com/buluma))
