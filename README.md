@@ -35,7 +35,7 @@ same runtime.
 
 ## Local development
 
-Requirements: Node.js 24.18.0, Bun 1.4.0, and an authenticated GitHub CLI.
+Requirements: Node.js 24.18.0, Bun 1.4.4, and an authenticated GitHub CLI.
 
 ```sh
 nvm use
