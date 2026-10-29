@@ -1,7 +1,7 @@
 {
   "name": "github-command-center",
   "type": "module",
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.4",
   "scripts": {
     "build": "bun run typecheck && vite build",
     "build:worker": "VITE_PUBLIC_DEPLOYMENT=1 bun run build",
@@ -57,7 +57,7 @@
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
     "vitest": "^4.1.11",
-    "wrangler": "^4.147.0",
+    "wrangler": "^4.155.0",
     "zod": "^4.4.3"
   },
   "license": "MIT",
