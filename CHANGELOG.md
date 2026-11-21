@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- Refresh active repository commit details in bounded batches [\#29](https://github.com/buluma/gcc/pull/29) ([buluma](https://github.com/buluma))
 - Add operator-run hosted service diagnostics [\#28](https://github.com/buluma/gcc/pull/28) ([buluma](https://github.com/buluma))
 - Correct hosted cache persistence guidance [\#26](https://github.com/buluma/gcc/pull/26) ([buluma](https://github.com/buluma))
 - Update the project to Bun 1.4.4 [\#24](https://github.com/buluma/gcc/pull/24) ([buluma](https://github.com/buluma))
