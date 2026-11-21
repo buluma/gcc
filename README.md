@@ -134,6 +134,8 @@ docker run --rm -p 3000:3000 \
 Add the three OAuth variables only when enabling sign-in. The container exposes
 and health-checks `/healthz`.
 
+With Docker Compose, set `GCC_PORT` to change the host port and `BASE_URL` to the public URL. Set both when using a different port or reverse proxy; OAuth deployments require HTTPS.
+
 ## Verify
 
 ```sh
