@@ -134,8 +134,6 @@ docker run --rm -p 3000:3000 \
 Add the three OAuth variables only when enabling sign-in. The container exposes
 and health-checks `/healthz`.
 
-Hosted dashboard caches are held in memory and do not persist across container restarts.
-
 ## Verify
 
 ```sh
@@ -152,7 +150,7 @@ hosted health smoke. Focused commands and the container gate are documented in
 
 - Local mode uses `gh api`; hosted OAuth uses the signed-in token; public routes
   use only `GITHUB_PUBLIC_TOKEN` or anonymous GitHub REST.
-- Full and quick server payloads use short process-local caches.
+- Full and quick server payloads use short process-local caches. Hosted dashboard caches do not persist across container restarts.
 - Latest commit refreshes are bounded by `scanLimit`: public scans default to
   16 repositories and cannot exceed 16; authenticated scans default to 24.
   Unchanged repository details are retained for one day, but newer repository
