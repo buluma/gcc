@@ -9,6 +9,7 @@
     "check:worker": "bun run build:worker && wrangler deploy --dry-run --strict",
     "clean": "rm -rf dist",
     "dead-code": "knip",
+    "diagnose": "node server/diagnose.ts",
     "deploy": "bun run build:worker && wrangler deploy --strict",
     "dev": "vite --host 127.0.0.1",
     "lint": "eslint .",
