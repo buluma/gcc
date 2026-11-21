@@ -14,6 +14,8 @@ runs (including Needs Attention and Activity). Match repository names, titles or
 messages, authors, PR/issue numbers, labels, commit SHAs, or workflow names and
 branches. Search does not fetch older GitHub history.
 
+While a dashboard is open, latest commits for additional recently active repositories refresh in bounded batches. Progress is shown on the dashboard, and the refresh pauses if GitHub quota is low or requests fail.
+
 PR details and squash merges use the same authenticated identity as the private
 dashboard: local `gh` credentials in dev/preview, or your hosted OAuth session.
 Local PR actions do not require a second server. Public PR titles open GitHub;
@@ -153,8 +155,7 @@ For an operator-run dependency check, use `docker compose exec github-command-ce
 - Local mode uses `gh api`; hosted OAuth uses the signed-in token; public routes
   use only `GITHUB_PUBLIC_TOKEN` or anonymous GitHub REST.
 - Full and quick server payloads use short process-local caches.
-- Latest commit refreshes are bounded by `scanLimit`: public scans default to
-  16 repositories and cannot exceed 16; authenticated scans default to 24.
+- Initial latest commit and workflow scans are bounded by `scanLimit`: public scans default to 16 repositories and cannot exceed 16; authenticated scans default to 24. Additional recently active repositories receive commit details in bounded background batches while the dashboard is open.
   Unchanged repository details are retained for one day, but newer repository
   activity triggers revalidation. Failed revalidation preserves the previous
   commit and retries on the next load. Only local mode persists details under `.cache/`.

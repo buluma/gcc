@@ -124,6 +124,7 @@ export type DashboardPayload = {
   generatedAt: string;
   detailLevel: "quick" | "full";
   scanLimit: number;
+  detailProgress?: { completed: number; total: number; status: "pending" | "complete" | "paused" };
   viewer: Viewer;
   repos: RepoSummary[];
   recentCommits: CommitSummary[];

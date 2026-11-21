@@ -1,10 +1,38 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDemoDashboard } from "@/lib/demo-dashboard";
 import DashboardPage from "./DashboardPage";
 
 afterEach(cleanup);
+
+it("refreshes repository details in the background and shows progress", async () => {
+  window.sessionStorage.clear();
+  const initial = { ...createDemoDashboard(), detailProgress: { completed: 8, total: 12, status: "pending" as const } };
+  const complete = { ...initial, detailProgress: { completed: 12, total: 12, status: "complete" as const } };
+  const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.includes("enrich=1") ? complete : initial), {
+    status: 200, headers: { "x-gcc-auth": "public" },
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      render(<DashboardPage demoMode={false} publicUsername="buluma" theme="light" onThemeToggle={vi.fn()} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByRole("status").textContent).toContain("8 of 12");
+    await act(async () => { await vi.advanceTimersByTimeAsync(13_000); });
+    expect(fetchMock.mock.calls.some(([url]) => url.includes("enrich=1"))).toBe(true);
+    expect(screen.queryByText(/8 of 12 active repositories/)).toBeNull();
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    window.sessionStorage.clear();
+  }
+});
 
 describe("dashboard search", () => {
   it("filters PRs, issues, and commits by repository and restores them on clear", () => {

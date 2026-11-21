@@ -279,13 +279,14 @@ export default function DashboardPage({
   }, []);
 
   const dashboardApiPath = useCallback(
-    (options: { force?: boolean; quick?: boolean } = {}) => {
+    (options: { force?: boolean; quick?: boolean; enrich?: boolean } = {}) => {
       const base = publicUsername
         ? `/api/dashboard/${encodeURIComponent(publicUsername)}`
         : "/api/dashboard";
       const params = new URLSearchParams();
       if (options.force) params.set("refresh", "1");
       if (options.quick) params.set("quick", "1");
+      if (options.enrich) params.set("enrich", "1");
       const queryString = params.toString();
       return queryString ? `${base}?${queryString}` : base;
     },
@@ -432,6 +433,32 @@ export default function DashboardPage({
     publicUsername,
   ]);
 
+  useEffect(() => {
+    if (demoMode || refreshing || updatingDetails || data?.detailProgress?.status !== "pending") return;
+    const controller = new AbortController();
+    const originalRequest = activeRequest.current;
+    const timer = window.setTimeout(() => {
+      void requestDashboard(dashboardApiPath({ enrich: true }), controller.signal).then((result) => {
+        if (controller.signal.aborted || activeRequest.current !== originalRequest) return;
+        if (result.kind === "unauthorized") {
+          clearDashboardCache(dashboardSourceKey);
+          setData(null);
+          setNeedsLogin(true);
+          return;
+        }
+        setData(result.payload);
+        writeDashboardCache(dashboardSourceKey, result.payload);
+      }).catch((requestError: unknown) => {
+        if (controller.signal.aborted || activeRequest.current !== originalRequest || isAbortError(requestError)) return;
+        setError(toDashboardErrorState(requestError, { stale: true }));
+        setData((previous) => previous?.detailProgress
+          ? { ...previous, detailProgress: { ...previous.detailProgress, status: "paused" } }
+          : previous);
+      });
+    }, 13_000);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [dashboardApiPath, dashboardSourceKey, data, demoMode, refreshing, updatingDetails]);
+
   const languages = useMemo(() => {
     if (!data) return [];
     return [
@@ -515,6 +542,12 @@ export default function DashboardPage({
           onRefresh={() => void loadDashboard(true)}
         />
         <div className="flex min-h-0 flex-col gap-3 p-3 lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden">
+          {data?.detailProgress && data.detailProgress.status !== "complete" ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              Latest commits: {data.detailProgress.completed} of {data.detailProgress.total} active repositories refreshed.
+              {data.detailProgress.status === "pending" ? " Refreshing in the background." : " Background refresh paused; use Refresh to retry."}
+            </p>
+          ) : null}
           {error ? (
             <ErrorPanel
               error={error}

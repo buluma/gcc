@@ -16,6 +16,7 @@ export type DashboardLoaderOptions = {
   force?: boolean;
   quick?: boolean;
   scanLimit?: number;
+  enrich?: boolean;
   auth?: DashboardAuth;
 };
 
@@ -25,6 +26,7 @@ export type DashboardRequestOptions = {
   force: boolean;
   quick: boolean;
   scanLimit: number;
+  enrich?: boolean;
 };
 
 export type ParsedDashboardRequest = {
@@ -60,6 +62,7 @@ export function parseDashboardRequest(
       force: url.searchParams.get("refresh") === "1",
       quick: url.searchParams.get("quick") === "1",
       scanLimit: parseScanLimit(url.searchParams.get("scanLimit")),
+      ...(url.searchParams.get("enrich") === "1" ? { enrich: true } : {}),
     },
   };
 }

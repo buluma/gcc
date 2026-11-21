@@ -47,6 +47,8 @@ input once, then call the dashboard service with the canonical option shape.
 
 ## Data and cache scopes
 
+- An open dashboard requests additional active repository commit details in bounded batches. Each batch checks GitHub quota, uses the current session or public identity, and pauses on low quota or failed requests. The browser stops scheduling batches when the dashboard closes; cached results remain scoped to that identity.
+
 - Full dashboard results are cached in memory for five minutes; quick results
   are cached for one minute.
 - Repository details contain only the latest commit. Public `scanLimit` is capped
