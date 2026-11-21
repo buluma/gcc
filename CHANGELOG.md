@@ -6,6 +6,7 @@
 
 **Merged pull requests:**
 
+- Correct hosted cache persistence guidance [\#26](https://github.com/buluma/gcc/pull/26) ([buluma](https://github.com/buluma))
 - Update the project to Bun 1.4.4 [\#24](https://github.com/buluma/gcc/pull/24) ([buluma](https://github.com/buluma))
 
 ## [v0.3.0](https://github.com/buluma/gcc/tree/v0.3.0) (2026-10-04)
