@@ -25,9 +25,6 @@ services:
       start_period: 10s
       retries: 3
     restart: unless-stopped
-    # Optional: persist repo detail cache
-    # volumes:
-    #   - gcc-repo-cache:/app/.cache/github-command-center
 
   # Optional: reverse proxy with automatic HTTPS (Caddy)
   # Uncomment and configure domain for production HTTPS + OAuth
@@ -49,6 +46,5 @@ services:
   #   restart: unless-stopped
 
 # volumes:
-#   gcc-repo-cache:
 #   caddy_data:
 #   caddy_config:

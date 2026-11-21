@@ -134,6 +134,8 @@ docker run --rm -p 3000:3000 \
 Add the three OAuth variables only when enabling sign-in. The container exposes
 and health-checks `/healthz`.
 
+Hosted dashboard caches are held in memory and do not persist across container restarts.
+
 ## Verify
 
 ```sh
