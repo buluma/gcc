@@ -153,8 +153,7 @@ hosted health smoke. Focused commands and the container gate are documented in
 - Local mode uses `gh api`; hosted OAuth uses the signed-in token; public routes
   use only `GITHUB_PUBLIC_TOKEN` or anonymous GitHub REST.
 - Full and quick server payloads use short process-local caches.
-- Latest commit refreshes are bounded by `scanLimit`: public scans default to
-  16 repositories and cannot exceed 16; authenticated scans default to 24.
+- Initial latest commit and workflow scans are bounded by `scanLimit`: public scans default to 16 repositories and cannot exceed 16; authenticated scans default to 24. Additional recently active repositories receive commit details in bounded background batches while the dashboard is open.
   Unchanged repository details are retained for one day, but newer repository
   activity triggers revalidation. Failed revalidation preserves the previous
   commit and retries on the next load. Only local mode persists details under `.cache/`.
