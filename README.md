@@ -134,8 +134,6 @@ docker run --rm -p 3000:3000 \
 Add the three OAuth variables only when enabling sign-in. The container exposes
 and health-checks `/healthz`.
 
-For an operator-run dependency check, use `docker compose exec github-command-center node server/diagnose.ts`. It checks GitHub API reachability using the configured public token and reports whether OAuth settings are present; it does not validate the OAuth credentials or callback registration. `/healthz` remains a lightweight process check.
-
 ## Verify
 
 ```sh
@@ -147,6 +145,8 @@ The required gate runs lint, dead-code analysis, browser and server tests in
 their real environments, typechecking, a production build, and a dependency-free
 hosted health smoke. Focused commands and the container gate are documented in
 [`docs/HARNESS.md`](./docs/HARNESS.md).
+
+For an operator-run dependency check, use `docker compose exec github-command-center node server/diagnose.ts`. It checks GitHub API reachability using the configured public token and reports whether OAuth settings are present; it does not validate the OAuth credentials or callback registration. `/healthz` remains a lightweight process check.
 
 ## Data and caching
 
