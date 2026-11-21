@@ -12,6 +12,7 @@ import {
   clearLastRateLimitInfo,
 } from "./github-client.ts";
 import {
+  DashboardRequestError,
   normalizeGithubLogin,
   type DashboardLoaderOptions,
   type PublicDashboardLoaderOptions,
@@ -276,6 +277,7 @@ async function getGithubDashboardInner(
     force?: boolean;
     quick?: boolean;
     scanLimit?: number;
+    enrich?: boolean;
   } = {},
 ): Promise<DashboardPayload> {
   const now = Date.now();
@@ -284,6 +286,7 @@ async function getGithubDashboardInner(
     : clamp(options.scanLimit ?? 24, 8, 60);
   const quick = Boolean(options.quick);
   const force = Boolean(options.force);
+  if (options.enrich) return enrichDashboard(scanLimit, now);
   const cached = getCachedDashboard({ force, quick, scanLimit, now });
 
   if (cached) {
@@ -506,6 +509,7 @@ async function loadGithubDashboard({
     generatedAt: new Date().toISOString(),
     detailLevel: "full",
     scanLimit,
+    detailProgress: getDetailProgress(enrichedRepos, await loadRepoDetailsCache(), now),
     viewer,
     repos: enrichedRepos.map((repo) => ({
       ...repo,
@@ -525,6 +529,88 @@ async function loadGithubDashboard({
     await saveDashboardCache();
   }
   return payload;
+}
+
+function pendingDetailRepos(repos: RepoSummary[], cache: RepoDetailsCacheFile, now: number) {
+  return repos.filter((repo) => {
+    const activityAt = getRepoActivityAt(repo);
+    if (!isRecentlyActive(activityAt, now)) return false;
+    const cached = cache.repos[repo.fullName];
+    return !cached || now - cached.refreshedAt >= REPO_DETAILS_CACHE_MS ||
+      Boolean(activityAt && (!cached.activityAt || activityAt > cached.activityAt));
+  });
+}
+
+function getDetailProgress(repos: RepoSummary[], cache: RepoDetailsCacheFile, now: number): NonNullable<DashboardPayload["detailProgress"]> {
+  const total = repos.filter((repo) => isRecentlyActive(getRepoActivityAt(repo), now)).length;
+  const pending = pendingDetailRepos(repos, cache, now).length;
+  return { completed: total - pending, total, status: pending ? "pending" : "complete" };
+}
+
+async function enrichDashboard(scanLimit: number, now: number): Promise<DashboardPayload> {
+  const key = currentCacheKey();
+  const current = fullCaches.get(key);
+  const owner = loadOwners.get(`${key}:full`);
+  const isCurrent = () => fullCaches.get(key) === current && loadOwners.get(`${key}:full`) === owner;
+  if (!current || current.payload.scanLimit !== scanLimit) {
+    throw new DashboardRequestError("Background refresh cache expired. Refresh the dashboard to continue.");
+  }
+  if ([...inFlightDashboards.keys()].some((flight) => flight.startsWith(`${key}:full:`))) {
+    return current.payload;
+  }
+  const flightKey = `${key}:enrich`;
+  const existing = inFlightDashboards.get(flightKey);
+  if (existing) return existing;
+  const promise: Promise<DashboardPayload> = (async () => {
+    const cache = await loadRepoDetailsCache();
+    const pending = pendingDetailRepos(current.payload.repos, cache, now);
+    if (!pending.length) {
+      const payload = { ...current.payload, detailProgress: getDetailProgress(current.payload.repos, cache, now) };
+      if (isCurrent()) boundedMapSet(fullCaches, key, { timestamp: current.timestamp, payload });
+      return payload;
+    }
+    let budget = 0;
+    try {
+      const quota = await ghJson<{ resources?: { core?: { remaining?: number } } }>("/rate_limit");
+      const remaining = quota.resources?.core?.remaining;
+      if (typeof remaining === "number" && Number.isFinite(remaining)) {
+        budget = Math.max(0, Math.min(8, remaining - RATE_LIMIT_WARNING_THRESHOLD));
+      }
+    } catch {
+      // An unavailable quota check must not trigger extra GitHub requests.
+    }
+    if (!isCurrent()) return fullCaches.get(key)?.payload ?? current.payload;
+    const warnings = current.payload.warnings.filter((warning) =>
+      !(warning.area === "repo details" && warning.message.startsWith("Latest commit refresh is limited")),
+    );
+    if (!budget) {
+      warnings.push({ area: "repo details", message: "Background commit refresh paused because GitHub quota is low or unavailable." });
+      return { ...current.payload, detailProgress: { ...getDetailProgress(current.payload.repos, cache, now), status: "paused" }, warnings };
+    }
+    const details = await getPerRepoLatestDetails(current.payload.repos, pending.slice(0, budget), [], now, isCurrent);
+    if (!isCurrent()) return fullCaches.get(key)?.payload ?? current.payload;
+    const progress = getDetailProgress(current.payload.repos, cache, now);
+    if (pendingDetailRepos(pending.slice(0, budget), cache, now).length) {
+      progress.status = "paused";
+      warnings.push({ area: "repo details", message: "Background commit refresh paused after a GitHub request failed." });
+    }
+    const payload = {
+      ...current.payload,
+      repos: current.payload.repos.map((repo) => ({ ...repo, ...(details.get(repo.fullName) ?? {}) })),
+      recentCommits: getRecentCommitsFromRepoDetails(current.payload.repos, details),
+      detailProgress: progress,
+      warnings,
+    };
+    boundedMapSet(fullCaches, key, { timestamp: current.timestamp, payload });
+    await saveDashboardCache();
+    return payload;
+  })();
+  inFlightDashboards.set(flightKey, promise);
+  try {
+    return await promise;
+  } finally {
+    if (inFlightDashboards.get(flightKey) === promise) inFlightDashboards.delete(flightKey);
+  }
 }
 
 async function getQuickDashboard(scanLimit: number): Promise<DashboardPayload> {

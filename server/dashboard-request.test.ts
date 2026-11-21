@@ -37,6 +37,12 @@ describe("parseDashboardRequest", () => {
     })
   })
 
+  it("parses a background enrichment request", () => {
+    expect(parseDashboardRequest(new URL("http://localhost/api/dashboard?enrich=1"), "/api/dashboard").options).toEqual({
+      force: false, quick: false, scanLimit: 24, enrich: true,
+    })
+  })
+
   it.each([
     "/api/dashboard/-invalid",
     "/api/dashboard/invalid-",

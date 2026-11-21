@@ -14,6 +14,8 @@ runs (including Needs Attention and Activity). Match repository names, titles or
 messages, authors, PR/issue numbers, labels, commit SHAs, or workflow names and
 branches. Search does not fetch older GitHub history.
 
+While a dashboard is open, latest commits for additional recently active repositories refresh in bounded batches. Progress is shown on the dashboard, and the refresh pauses if GitHub quota is low or requests fail.
+
 PR details and squash merges use the same authenticated identity as the private
 dashboard: local `gh` credentials in dev/preview, or your hosted OAuth session.
 Local PR actions do not require a second server. Public PR titles open GitHub;

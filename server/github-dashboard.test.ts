@@ -26,6 +26,7 @@ type GithubExecutorOptions = {
   workflowRunFailuresByRepo?: Record<string, unknown>;
   reviewRequestedIds?: number[];
   pullRequestSearchItems?: unknown[];
+  remainingQuota?: number;
 };
 
 function createGithubExecutor({
@@ -39,6 +40,7 @@ function createGithubExecutor({
   workflowRunFailuresByRepo = {},
   reviewRequestedIds,
   pullRequestSearchItems,
+  remainingQuota = 5000,
 }: GithubExecutorOptions = {}) {
   const calls: GhCall[] = [];
   let graphqlPage = 0;
@@ -46,6 +48,10 @@ function createGithubExecutor({
   const executor = vi.fn(async (args: string[], endpoint: string) => {
     calls.push({ args, endpoint });
     await Promise.resolve();
+
+    if (endpoint === "/rate_limit") {
+      return JSON.stringify({ resources: { core: { remaining: remainingQuota } } });
+    }
 
     if (endpoint === "user") {
       return JSON.stringify({
@@ -576,6 +582,49 @@ describe("getGithubDashboard request coalescing", () => {
     ).not.toContain("buluma/repo-");
   });
 
+  it("refreshes additional active repository details in bounded batches", async () => {
+    const activeAt = new Date().toISOString();
+    const repos = createRawRepos(12, { pushed_at: activeAt, updated_at: activeAt });
+    const { calls, executor } = createGithubExecutor({ repos });
+    configureGithubDashboardForTests(executor);
+
+    const initial = await getGithubDashboard({ force: true, scanLimit: 8 });
+    expect(initial.detailProgress).toEqual({ completed: 8, total: 12, status: "pending" });
+    const updated = await getGithubDashboard({ enrich: true, scanLimit: 8 });
+    expect(updated.detailProgress).toEqual({ completed: 12, total: 12, status: "complete" });
+    expect(calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1"))).toHaveLength(12);
+    expect(updated.repos.every((repo) => repo.latestCommit)).toBe(true);
+  });
+
+  it("pauses background detail refresh when GitHub quota is low", async () => {
+    const activeAt = new Date().toISOString();
+    const repos = createRawRepos(12, { pushed_at: activeAt, updated_at: activeAt });
+    const { calls, executor } = createGithubExecutor({ repos, remainingQuota: 100 });
+    configureGithubDashboardForTests(executor);
+    await getGithubDashboard({ force: true, scanLimit: 8 });
+    const paused = await getGithubDashboard({ enrich: true, scanLimit: 8 });
+    expect(paused.detailProgress).toEqual({ completed: 8, total: 12, status: "paused" });
+    expect(calls.filter((call) => call.endpoint.endsWith("/commits?per_page=1"))).toHaveLength(8);
+  });
+
+  it("does not start a full dashboard load when the enrichment cache is missing", async () => {
+    const { calls, executor } = createGithubExecutor();
+    configureGithubDashboardForTests(executor);
+    await expect(getGithubDashboard({ enrich: true })).rejects.toThrow("Background refresh cache expired");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("pauses rather than retrying a failed background request indefinitely", async () => {
+    const activeAt = new Date().toISOString();
+    const repos = createRawRepos(12, { pushed_at: activeAt, updated_at: activeAt });
+    const { executor } = createGithubExecutor({ repos, latestCommitFailures: [...Array(8).fill(undefined), new Error("request failed")] });
+    configureGithubDashboardForTests(executor);
+    await getGithubDashboard({ force: true, scanLimit: 8 });
+    const paused = await getGithubDashboard({ enrich: true, scanLimit: 8 });
+    expect(paused.detailProgress).toEqual({ completed: 11, total: 12, status: "paused" });
+    expect(paused.warnings.some((warning) => warning.message.includes("paused after a GitHub request failed"))).toBe(true);
+  });
+
   it("preserves cached repo details outside a narrower refresh set", async () => {
     const activeAt = new Date().toISOString();
     const repos = createRawRepos(9, {
@@ -1032,6 +1081,31 @@ describe("getGithubDashboard workflow run warnings", () => {
 
 
 describe("dashboard request ownership and enrichment", () => {
+  it("does not let an older background batch overwrite a newer full refresh", async () => {
+    const activeAt = new Date().toISOString();
+    const repos = createRawRepos(9, { pushed_at: activeAt, updated_at: activeAt });
+    const { executor } = createGithubExecutor({ repos });
+    let release!: (value: string) => void;
+    let started!: () => void;
+    const requested = new Promise<void>((resolve) => { started = resolve; });
+    configureGithubDashboardForTests(async (args, endpoint) => {
+      if (endpoint === "/repos/buluma/repo-9/commits?per_page=1") {
+        started();
+        return new Promise<string>((resolve) => { release = resolve; });
+      }
+      return executor(args, endpoint);
+    });
+    await getGithubDashboard({ force: true, scanLimit: 8 });
+    const background = getGithubDashboard({ enrich: true, scanLimit: 8 });
+    await requested;
+    const fresh = await getGithubDashboard({ force: true, scanLimit: 8 });
+    release(JSON.stringify([createRawCommit("Old background commit")]));
+    await background;
+    const cached = await getGithubDashboard({ scanLimit: 8 });
+    expect(cached).toEqual(fresh);
+    expect(cached.repos.find((repo) => repo.fullName === "buluma/repo-9")?.latestCommit).toBeNull();
+  });
+
   it("does not let an older normal load overwrite a forced full cache", async () => {
     const { executor } = createGithubExecutor({ repos: [createRawRepo({ name: "new", full_name: "buluma/new" })] });
     let release!: (value: string) => void;

@@ -530,6 +530,10 @@ async function handleDashboard(
     res.setHeader("x-gcc-auth", "oauth");
     sendJson(res, 200, payload);
   } catch (error) {
+    if (error instanceof DashboardRequestError) {
+      sendJson(res, error.status, { message: error.message });
+      return;
+    }
     const status = (error as { status?: number }).status;
     if (status === 401) {
       sendExpiredSession(dependencies, res);
