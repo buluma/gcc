@@ -45,7 +45,7 @@ export function NeedsAttentionCard({
   viewerLogin: string;
   onOpenPRDetail?: (owner: string, repo: string, number: number) => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const contentId = useId();
   const [expanded, setExpanded] = useState(false);
   const displayed = expanded ? items : items.slice(0, COLLAPSED_LIMIT);

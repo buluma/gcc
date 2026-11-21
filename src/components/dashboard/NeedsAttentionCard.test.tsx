@@ -15,10 +15,6 @@ describe("NeedsAttentionCard", () => {
     );
     const toggle = screen.getByRole("button", { name: "Needs Attention" });
     const content = document.getElementById(toggle.getAttribute("aria-controls")!);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(content?.hidden).toBe(false);
-
-    fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(content?.hidden).toBe(true);
     expect(screen.getByText("6 critical")).toBeTruthy();
@@ -29,6 +25,10 @@ describe("NeedsAttentionCard", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(content?.hidden).toBe(false);
     expect(screen.getByRole("button", { name: "Show 2 more" })).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(content?.hidden).toBe(true);
   });
 
   it("shows an empty state when nothing needs attention", () => {
@@ -70,6 +70,7 @@ describe("NeedsAttentionCard", () => {
         onOpenPRDetail={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: "Needs Attention" }));
     expect(screen.getByText("Item 0")).toBeTruthy();
     expect(screen.getByText("Item 3")).toBeTruthy();
     expect(screen.queryByText("Item 4")).toBeNull();
@@ -103,6 +104,7 @@ describe("NeedsAttentionCard", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Needs Attention" }));
     fireEvent.click(screen.getByText("Add feature"));
     expect(onOpenPRDetail).toHaveBeenCalledWith("me", "app", 7);
   });
