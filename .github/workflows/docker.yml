@@ -12,6 +12,8 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -39,6 +41,7 @@ jobs:
             type=ref,event=tag
 
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context: .
           push: true
@@ -53,18 +56,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Pull image
-        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-push.outputs.digest }}
 
       - name: Run container
         run: |
           docker run -d --name gcc-test \
             -e BASE_URL=http://localhost:3000 \
             -p 3000:3000 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-push.outputs.digest }}
 
       - name: Wait for health
         run: |
           for i in {1..30}; do
+            echo "Health check attempt $i"
             if curl -sf http://localhost:3000/healthz; then
               echo "Health check passed"
               exit 0
