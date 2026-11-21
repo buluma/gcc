@@ -8,7 +8,9 @@
 
 - Refresh active repository commit details in bounded batches [\#29](https://github.com/buluma/gcc/pull/29) ([buluma](https://github.com/buluma))
 - Add operator-run hosted service diagnostics [\#28](https://github.com/buluma/gcc/pull/28) ([buluma](https://github.com/buluma))
+- Smoke-test the image built by the Docker workflow [\#27](https://github.com/buluma/gcc/pull/27) ([buluma](https://github.com/buluma))
 - Correct hosted cache persistence guidance [\#26](https://github.com/buluma/gcc/pull/26) ([buluma](https://github.com/buluma))
+- Make Compose port and public URL configurable [\#25](https://github.com/buluma/gcc/pull/25) ([buluma](https://github.com/buluma))
 - Update the project to Bun 1.4.4 [\#24](https://github.com/buluma/gcc/pull/24) ([buluma](https://github.com/buluma))
 
 ## [v0.3.0](https://github.com/buluma/gcc/tree/v0.3.0) (2026-10-04)
@@ -23,7 +25,6 @@
 - feat: stale-cache fallback for GitHub API outages [\#20](https://github.com/buluma/gcc/pull/20) ([buluma](https://github.com/buluma))
 - refactor: improve codebase quality and UX [\#19](https://github.com/buluma/gcc/pull/19) ([buluma](https://github.com/buluma))
 - ci: only run Docker workflow on merge to master and version tags [\#18](https://github.com/buluma/gcc/pull/18) ([buluma](https://github.com/buluma))
-- fix: reduce PR detail dialog width to 70vw [\#17](https://github.com/buluma/gcc/pull/17) ([buluma](https://github.com/buluma))
 - fix: force PR detail dialog width and add description scroll [\#16](https://github.com/buluma/gcc/pull/16) ([buluma](https://github.com/buluma))
 - fix: query statusCheckRollup subfields and widen PR detail dialog [\#15](https://github.com/buluma/gcc/pull/15) ([buluma](https://github.com/buluma))
 - feat: add PR details view in a pop-up dialog [\#14](https://github.com/buluma/gcc/pull/14) ([buluma](https://github.com/buluma))
@@ -34,6 +35,7 @@
 
 **Merged pull requests:**
 
+- fix: reduce PR detail dialog width to 70vw [\#17](https://github.com/buluma/gcc/pull/17) ([buluma](https://github.com/buluma))
 - ci: add Docker build and push workflow [\#12](https://github.com/buluma/gcc/pull/12) ([buluma](https://github.com/buluma))
 - feat: add PR merge capability [\#11](https://github.com/buluma/gcc/pull/11) ([buluma](https://github.com/buluma))
 - test: add contract tests and fix TypeScript 6 compatibility [\#10](https://github.com/buluma/gcc/pull/10) ([buluma](https://github.com/buluma))
