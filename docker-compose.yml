@@ -25,6 +25,7 @@ services:
       start_period: 10s
       retries: 3
     restart: unless-stopped
+    # Hosted dashboard caches are memory-only and do not persist across restarts.
 
   # Optional: reverse proxy with automatic HTTPS (Caddy)
   # Uncomment and configure domain for production HTTPS + OAuth
